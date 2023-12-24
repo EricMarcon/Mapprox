@@ -1,10 +1,11 @@
 ---
-title: "Title of the Article"
+title: "Traitement des données de grande taille avec M"
 author:
-  - name: "First Author's name"
-  - name: "Second Author's name"
+  - name: "Eric Marcon"
+  - name: "Florence Puech"
 abstract: >
-  Abstract of the article.
+  Ce document teste l'impact de l'approximation de la position des points sur la précision de M et le temps de calcul.
+  Dans un deuxième temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sont évalués.
 date: "`r format(Sys.time(), '%d %B %Y')`"
 url: https://EricMarcon.github.io/Mapprox/
 github-repo: EricMarcon/Mapprox
@@ -14,8 +15,6 @@ lang: fr-FR
 bibliography: references.bib
 biblio-style: chicago
 # LaTeX
-preamble: >
-  \hyphenation{bio-di-ver-si-ty sap-lings}
 # Print table of contents in PDFs?
 pdftoc: false
 # If true, choose its depth
@@ -26,25 +25,15 @@ urlcolor: blue
 always_allow_html: yes
 csquotes: true
 output:
-  bookdown::html_document2:
-    toc: yes
-    toc_float: yes
-    css: style.css
-    code_folding: show
   rmdformats::downcute:
     use_bookdown: yes
     lightbox: yes
-  bookdown::gitbook:
-    config:
-      download: "pdf"
-      sharing:
-        github: yes
+    pandoc_args: "--lua-filter=fr-nbsp.lua"
   bookdown::pdf_book:
     template: latex/template.tex
     citation_package: natbib
     latex_engine: xelatex
     keep_tex: yes
-  bookdown::word_document2: default
 ---
 
 ```{r DoNotModify, include=FALSE}
@@ -81,13 +70,13 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 ```{r Options, include=FALSE}
 ### Customized options for this document
 # Add necessary packages here
-Packages <- c("tidyverse", "spatstat", "dbmss")
+Packages <- c("tidyverse", "spatstat", "dbmss", "pbapply", "plyr", "GoFKernel", "microbenchmark")
 # Install them
 InstallPackages(Packages)
 
 # knitr options
 knitr::opts_chunk$set(
-  cache =   FALSE,    # Cache chunk results
+  cache =   TRUE,     # Cache chunk results
   include = TRUE,     # Show/Hide chunks
   echo =    TRUE,     # Show/Hide code
   warning = FALSE,    # Show/Hide warnings
@@ -113,24 +102,36 @@ knitr::opts_chunk$set(dev.args=list(bg="transparent"))
 set.seed(973)
 ```
 
-# Motivation
-
 # Tirage des points
+
+Un jeu de points est tiré par un processus binomial dans une fenêtre carrée de côté 1.
+La majorité des points constitue les "contrôles" et une partie constitue les "cas", dont la structure spatiale est étudiée.
+Le poids des points est tiré dans une [loi gamma](https://fr.wikipedia.org/wiki/Loi_Gamma) dont les paramètre de forme et d'écelle sont libres.
+
+
+Les paramètres sont:
+
+- le nombre de points,
+- la proportion de contrôles,
+- la forme et l'échelle de la loi gamma.
 
 ```{r}
 #| label: Parametres
-points_nb <- 100000
+points_nb <- 40000
 case_ratio <- 1/20
-size_gamma_shape <- 1
+size_gamma_shape <- 0.95
 size_gamma_scale  <- 10
 ```
 
+
+La fonction `X_draw()` permet de tirer un semis de points selon les paramètres.
+L'argument `points_nb` qui fixe le nombre de points peut être modifé; les autres paramètres ont leur valeur fixée plus haut.
 
 ```{r}
 library("tidyverse")
 library("spatstat")
 library("dbmss")
-X_draw <- function() {
+X_draw <- function(points_nb) {
   points_nb %>% 
     runifpoint() %>% 
     as.wmppp() ->
@@ -140,18 +141,37 @@ X_draw <- function() {
   c(rep("Control", controls_nb), rep("Case", cases_nb)) %>% 
     as.factor() ->
     X$marks$PointType
-  X$marks$PointWeight <- rgamma(100, shape = size_gamma_shape, scale = size_gamma_scale)
+  X$marks$PointWeight <- ceiling(
+    rgamma(
+      points_nb, 
+      shape = size_gamma_shape, 
+      scale = size_gamma_scale
+    )
+  )
   X
 }
-X <- X_draw()
+
+# Example
+X <- X_draw(points_nb)
+# Map the cases
+autoplot(X[X$marks$PointType == "Case"])
+# Point size distribution
+hist(
+  X$marks$PointWeight, 
+  breaks = unique(X$marks$PointWeight), 
+  main = "",
+  xlab = "Point size")
 ```
 
 # Grille
 
+La fenêtre est découpée en une grille dont le nombre de cellules est `partitions` au carré.
+
 ```{r}
-partitions <- 100
-r <- c((0:9) / 100, (2:10) / 20)
+partitions <- 20
 ```
+
+La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient pour mimer l'approximation habituelle de la position des points d'une unité administrative par la position de son centroïde.
 
 ```{r}
 # Group points into cells
@@ -174,13 +194,24 @@ X %>%
 }
 ```
 
+La position approximative est présentée sur la carte suivante.
+Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids est la somme de ceux des points individuels.
+
 ```{r}
 group_points(X, partitions) %>% autoplot(alpha = 0.5)
 ```
 
-```{r}
-simulations_n <- 100
+# Calcul de M
 
+Les distances auxquelles la fonction *M* est calculées sont choisies dans `r`.
+
+```{r}
+r <- c((0:9) / 100, (2:10) / 20)
+```
+
+La fonction `X_to_M()` calcule la fonction M et renvoie le vecteur de ses valeurs pour chaque distance.
+
+```{r}
 # Compute M
 X_to_M <- function(X) {
   X %>% 
@@ -190,21 +221,40 @@ X_to_M <- function(X) {
 ```
 
 
+# Tests
 
-# Test
+Le nombre de répétition des tests est fixé par `simulations_n`.
+
+```{r}
+simulations_n <- 10
+```
+
+`X_list` contient `simulations_n` tirages du jeu de points.
 
 ```{r}
 # Simulate X
-X_list <- replicate(simulations_n, X_draw(), simplify = FALSE)
+X_list <- replicate(simulations_n, X_draw(points_nb), simplify = FALSE)
+```
+
+Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
+
+```{r}
+library("pbapply")
 # Compute M
-system.time(M_original <- sapply(X_list, X_to_M))
+system.time(M_original <- pbsapply(X_list, X_to_M))
 
 # Group points and compute M
 X_grouped_list <- lapply(X_list, group_points, partitions = partitions)
 # Compute M
 system.time(M_grouped <- sapply(X_grouped_list, X_to_M))
+```
 
- # Correlation
+Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
+
+La corrélation entre les valeurs de M calculées par chaque méthode est calculée à chaque distance.
+
+```{r}
+# Correlation
 M_cor <- function(r_value) {
   r_index <- which(r == r_value)
   c(
@@ -212,6 +262,145 @@ M_cor <- function(r_value) {
     cor(M_original[r_index, ], M_grouped[r_index, ])
   ) 
 }
-sapply(r, M_cor) %>% t() %>% as_tibble() %>% rename(r = V1, correlation = V2)
+sapply(r, M_cor) %>%
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, correlation = V2) %>% 
+  ggplot(aes(x = r, y = correlation)) +
+    geom_point() +
+    geom_line()
 ```
 
+Les valeurs sont comparées.
+
+```{r}
+# Compare values
+M_bias <- function(r_value) {
+  r_index <- which(r == r_value)
+    c(
+    r_value,
+    mean(M_grouped[r_index, ] - M_original[r_index, ]),
+    sd(M_grouped[r_index, ] - M_original[r_index, ]), 
+    sd(M_original[r_index, ])
+  )
+}
+sapply(r, M_bias) %>% 
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, Error_mean = V2, Error_sd = V3, M_sd = V4) %>% 
+  ggplot() +
+    geom_point(aes(x = r, y = Error_mean)) +
+    geom_errorbar(
+      aes(
+        x = r, 
+        ymin = Error_mean - Error_sd, 
+        ymax = Error_mean + Error_sd
+      )
+    ) +
+    geom_errorbar(aes(x = r, ymin = 0, ymax = M_sd), col = "red")
+```
+
+La valeur moyenne de M est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
+
+Les barres rouges représentent l'écart-type empirique de la valeur de M, calculé à partir des simulations.
+Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de M calculées avec ou sans approximation.
+Les barres d'erreur sont l'écart-type de cette différence.
+
+L'approximation surestime systématiquement M, au point de détecter une concentration spatiale qui n'existe pas.
+L'erreur est importante jusqu'à la taille de la grille: tous les points d'une même cellule sont concentrés artificiellement en son centre.
+Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 5 ou 6 fois la taille de la grille.
+
+L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
+
+
+# Temps de calcul de M
+
+Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
+
+```{r}
+X_sizes <- c(1000, 5000, 10000, 50000, 100000, 500000)
+```
+
+La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluation de la fonction $M$.
+
+```{r}
+library("microbenchmark")
+test_time <-function(points_nb) {
+  X <- X_draw(points_nb)
+  microbenchmark(X_to_M(X), times = 4L) %>% 
+    pull("time")
+}
+
+
+X_sizes %>% 
+  sapply(test_time) %>% 
+  as_tibble() %>% 
+  pivot_longer(cols = everything()) %>% 
+  rename(Size = name) %>% 
+  group_by(Size) %>% 
+  summarise(Time = mean(value) / 1E9, sd = sd(value) / 1E9) %>% 
+  mutate(
+    Size = as.double(
+      plyr::mapvalues(
+        .$Size, 
+        from = paste0("V",seq_along(X_sizes)), 
+        to = X_sizes
+      )
+    )
+  ) -> M_time
+M_time %>% 
+  ggplot(aes(x = Size, y = Time)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = Time - sd, ymax = Time + sd)) +
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
+
+```{r}
+# Model
+M_time %>% 
+  mutate(logTime = log(Time), logSize = log(Size)) ->
+  M_time_log
+lm(logTime ~ logSize, data = M_time_log) %>% summary()
+```
+
+Le temps de calcul augmente moins vite que le carré du nombre de points.
+
+
+# Mémoire de M
+
+La mémoire utilisée est évaluée pour les mêmes tailles de données.
+
+```{r}
+# RAM
+library("profmem")
+test_ram <-function(points_nb) {
+  X <- X_draw(points_nb)
+  profmem(X_to_M(X)) %>% 
+    pull("bytes") %>% 
+    sum()
+}
+sapply(X_sizes, test_ram) %>% 
+  tibble(Size = X_sizes, RAM = . / 2^20) ->
+  M_ram
+M_ram %>% 
+  ggplot(aes(x = Size, y = RAM)) +
+    geom_point() +
+    geom_line()
+```
+La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points et n'est jamais critique pour des tailles de jeux de points traitables dans des temps raisonnables.
+
+```{r}
+# Model
+lm(RAM ~ Size, data = M_ram) %>% summary()
+```
+
+
+# Conclusion
+
+Le temps de calcul de M est de l'ordre de 10 secondes pour un jeu de 100 000 points sur un ordinateur peu puissant à 4 cœurs, et nécessite 25 Mo de RAM.
+Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc 3 heures.
+
+Le calcul des distances est parallélisé: un serveur de calcul augmente drastiquement la performance.
