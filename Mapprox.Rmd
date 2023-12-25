@@ -86,7 +86,7 @@ knitr::opts_chunk$set(
   # Graphic devices (ragg_png is better than standard png)
   dev = c("ragg_png", "pdf"),
   # Code chunk format
-  tidy = TRUE, tidy.opts = list(blank=FALSE, width.cutoff=50),
+  tidy = FALSE, tidy.opts = list(blank=FALSE, width.cutoff=50),
   size = "scriptsize", knitr.graphics.auto_pdf = TRUE
   )
 options(width = 50)
@@ -312,13 +312,16 @@ Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 5 ou 
 
 L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
 
+Le test effectué ici est beaucoup plus sévère que dans l'article: les points n'ont aucune structure, donc M permet de détecter les petites variations aléatoires des différents tirages.
+En présence d'une structure spatiale, les valeurs de M sont nettement mieux corrélées.
+
 
 # Temps de calcul de M
 
 Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
 
 ```{r}
-X_sizes <- c(1000, 5000, 10000, 50000, 100000, 500000)
+X_sizes <- c(1000, 5000, 10000, 50000, 100000)
 ```
 
 La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluation de la fonction $M$.
@@ -363,10 +366,12 @@ Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
 M_time %>% 
   mutate(logTime = log(Time), logSize = log(Size)) ->
   M_time_log
-lm(logTime ~ logSize, data = M_time_log) %>% summary()
+M_time_lm <- lm(logTime ~ logSize, data = M_time_log) 
+summary(M_time_lm)
 ```
 
 Le temps de calcul augmente moins vite que le carré du nombre de points.
+Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r as.integer(M_time[5, 1])`) pour $n_0$ points (ex.: `r format(as.numeric(M_time[4, 2]), digits=3)`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
 
 
 # Mémoire de M
@@ -400,7 +405,15 @@ lm(RAM ~ Size, data = M_ram) %>% summary()
 
 # Conclusion
 
-Le temps de calcul de M est de l'ordre de 10 secondes pour un jeu de 100 000 points sur un ordinateur peu puissant à 4 cœurs, et nécessite 25 Mo de RAM.
-Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc 3 heures.
+Le temps de calcul de M est de l'ordre de 6 secondes pour un jeu de 100 000 points sur un ordinateur portable (processeur Intel i7-1360P 2.20 GHz), et nécessite 25 Mo de RAM.
+Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc moins de deux heures.
+
+Pour un jeu de cinq millions de points, le temps de calcul attendu est $6 \times 50^{1.8} = 6860$ secondes, près de deux heures.
+1000 simulations nécessiteraient alors environ trois mois.
 
 Le calcul des distances est parallélisé: un serveur de calcul augmente drastiquement la performance.
+
+Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à caculer des intervalles de confiance.
+
+Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
+Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une précision dégradée jusqu'à environ 5 fois cette échelle dans le pire des cas, c'est-à-dire l'absence de structure spatiale.
