@@ -124,14 +124,14 @@ size_gamma_scale  <- 10
 ```
 
 
-La fonction `X_draw()` permet de tirer un semis de points selon les paramètres.
+La fonction `X_csr()` permet de tirer un semis de points selon les paramètres.
 L'argument `points_nb` qui fixe le nombre de points peut être modifé; les autres paramètres ont leur valeur fixée plus haut.
 
 ```{r}
 library("tidyverse")
 library("spatstat")
 library("dbmss")
-X_draw <- function(points_nb) {
+X_csr <- function(points_nb) {
   points_nb %>% 
     runifpoint() %>% 
     as.wmppp() ->
@@ -152,7 +152,7 @@ X_draw <- function(points_nb) {
 }
 
 # Example
-X <- X_draw(points_nb)
+X <- X_csr(points_nb)
 # Map the cases
 autoplot(X[X$marks$PointType == "Case"])
 # Point size distribution
@@ -162,6 +162,55 @@ hist(
   main = "",
   xlab = "Point size")
 ```
+
+La fonction `X_matern()` permet de tirer un semis de points dont les cas sont concentrés par un processus de Matérn.
+
+```{r}
+# Expected number of clusters
+kappa <- 20
+# Cluster radius
+scale <-  0.1
+```
+
+
+```{r}
+X_matern <- function(points_nb) {
+  cases_nb <- round(points_nb *  case_ratio)
+  controls_nb <- points_nb - cases_nb
+  # CSR controls
+  controls_nb %>% 
+    runifpoint() %>% 
+    superimpose(
+      # Matern cases
+      rMatClust(
+        kappa = kappa, 
+        scale = scale, 
+        mu = cases_nb / kappa
+      ) 
+    ) %>% 
+    as.wmppp() ->
+    X
+  # Update the number of cases
+  cases_nb <- X$n - controls_nb
+  c(rep("Control", controls_nb), rep("Case", cases_nb)) %>% 
+    as.factor() ->
+    X$marks$PointType
+  X$marks$PointWeight <- ceiling(
+    rgamma(
+      X$n, 
+      shape = size_gamma_shape, 
+      scale = size_gamma_scale
+    )
+  )
+  X
+}
+
+# Example
+X <- X_matern(points_nb)
+# Map the cases
+autoplot(X[X$marks$PointType == "Case"])
+```
+
 
 # Grille
 
@@ -223,17 +272,19 @@ X_to_M <- function(X) {
 
 # Tests
 
+## CSR
+
 Le nombre de répétition des tests est fixé par `simulations_n`.
 
 ```{r}
 simulations_n <- 10
 ```
 
-`X_list` contient `simulations_n` tirages du jeu de points.
+`X_csr_list` contient `simulations_n` tirages du jeu de points.
 
 ```{r}
 # Simulate X
-X_list <- replicate(simulations_n, X_draw(points_nb), simplify = FALSE)
+X_csr_list <- replicate(simulations_n, X_csr(points_nb), simplify = FALSE)
 ```
 
 Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
@@ -241,12 +292,12 @@ Pour évaluer l'effet de l'approximation de la position, le calcul exact et le c
 ```{r}
 library("pbapply")
 # Compute M
-system.time(M_original <- pbsapply(X_list, X_to_M))
+system.time(M_csr_original <- pbsapply(X_csr_list, X_to_M))
 
 # Group points and compute M
-X_grouped_list <- lapply(X_list, group_points, partitions = partitions)
+X_csr_grouped_list <- lapply(X_csr_list, group_points, partitions = partitions)
 # Compute M
-system.time(M_grouped <- sapply(X_grouped_list, X_to_M))
+system.time(M_csr_grouped <- sapply(X_csr_grouped_list, X_to_M))
 ```
 
 Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
@@ -255,14 +306,14 @@ La corrélation entre les valeurs de M calculées par chaque méthode est calcul
 
 ```{r}
 # Correlation
-M_cor <- function(r_value) {
+M_cor <- function(r_value, M_original, M_grouped) {
   r_index <- which(r == r_value)
   c(
     r_value,
     cor(M_original[r_index, ], M_grouped[r_index, ])
   ) 
 }
-sapply(r, M_cor) %>%
+sapply(r, M_cor, M_original = M_csr_original, M_grouped = M_csr_grouped) %>%
   t() %>% 
   as_tibble() %>% 
   rename(r = V1, correlation = V2) %>% 
@@ -275,29 +326,29 @@ Les valeurs sont comparées.
 
 ```{r}
 # Compare values
-M_bias <- function(r_value) {
+M_bias <- function(r_value, M_original, M_grouped) {
   r_index <- which(r == r_value)
     c(
     r_value,
-    mean(M_grouped[r_index, ] - M_original[r_index, ]),
-    sd(M_grouped[r_index, ] - M_original[r_index, ]), 
-    sd(M_original[r_index, ])
+    mean((M_grouped[r_index, ] - M_original[r_index, ]) / M_original[r_index, ]),
+    sd(M_grouped[r_index, ] - M_original[r_index, ]) / mean(M_grouped[r_index, ]), 
+    sd(M_original[r_index, ] / mean(M_original[r_index, ]))
   )
 }
-sapply(r, M_bias) %>% 
+sapply(r, M_bias, M_original = M_csr_original, M_grouped = M_csr_grouped) %>% 
   t() %>% 
   as_tibble() %>% 
-  rename(r = V1, Error_mean = V2, Error_sd = V3, M_sd = V4) %>% 
+  rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
   ggplot() +
-    geom_point(aes(x = r, y = Error_mean)) +
+    geom_point(aes(x = r, y = `Relative error`)) +
     geom_errorbar(
       aes(
         x = r, 
-        ymin = Error_mean - Error_sd, 
-        ymax = Error_mean + Error_sd
+        ymin = `Relative error` - `Error CV`, 
+        ymax = `Relative error` + `Error CV`
       )
     ) +
-    geom_errorbar(aes(x = r, ymin = 0, ymax = M_sd), col = "red")
+    geom_errorbar(aes(x = r, ymin = 0, ymax = `M CV`), col = "red")
 ```
 
 La valeur moyenne de M est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
@@ -316,6 +367,61 @@ Le test effectué ici est beaucoup plus sévère que dans l'article: les points 
 En présence d'une structure spatiale, les valeurs de M sont nettement mieux corrélées.
 
 
+## Matérn
+
+```{r}
+# Simulate X
+X_matern_list <- replicate(simulations_n, X_matern(points_nb), simplify = FALSE)
+```
+
+Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
+
+```{r}
+# Compute M
+system.time(M_matern_original <- pbsapply(X_matern_list, X_to_M))
+
+# Group points and compute M
+X_matern_grouped_list <- lapply(X_matern_list, group_points, partitions = partitions)
+# Compute M
+system.time(M_matern_grouped <- sapply(X_matern_grouped_list, X_to_M))
+```
+
+La corrélation entre les valeurs de M calculées par chaque méthode est calculée à chaque distance.
+
+```{r}
+# Correlation
+sapply(r, M_cor, M_original = M_matern_original, M_grouped = M_matern_grouped) %>%
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, correlation = V2) %>% 
+  ggplot(aes(x = r, y = correlation)) +
+    geom_point() +
+    geom_line()
+```
+
+Les valeurs sont comparées.
+
+```{r}
+# Compare values
+sapply(r, M_bias, M_original = M_matern_original, M_grouped = M_matern_grouped) %>% 
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
+  ggplot() +
+    geom_point(aes(x = r, y = `Relative error`)) +
+    geom_errorbar(
+      aes(
+        x = r, 
+        ymin = `Relative error` - `Error CV`, 
+        ymax = `Relative error` + `Error CV`
+      )
+    ) +
+    geom_errorbar(aes(x = r, ymin = 0, ymax = `M CV`), col = "red")
+```
+
+La corrélation est très élevée dès que la distance prise en compte dépasse le double de la maille de la grille et les erreurs sont assez faibles.
+
+
 # Temps de calcul de M
 
 Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
@@ -329,7 +435,7 @@ La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluat
 ```{r}
 library("microbenchmark")
 test_time <-function(points_nb) {
-  X <- X_draw(points_nb)
+  X <- X_csr(points_nb)
   microbenchmark(X_to_M(X), times = 4L) %>% 
     pull("time")
 }
@@ -382,7 +488,7 @@ La mémoire utilisée est évaluée pour les mêmes tailles de données.
 # RAM
 library("profmem")
 test_ram <-function(points_nb) {
-  X <- X_draw(points_nb)
+  X <- X_csr(points_nb)
   profmem(X_to_M(X)) %>% 
     pull("bytes") %>% 
     sum()
