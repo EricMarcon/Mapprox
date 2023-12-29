@@ -258,7 +258,99 @@ Les distances auxquelles la fonction *M* est calculées sont choisies dans `r`.
 r <- c((0:9) / 100, (2:10) / 20)
 ```
 
+## Données nécessaires
+
+Dans le package dbmss, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distance, objet de classe `Dtable`.
+
+Nous partons d'un tableau (data.frame) contenant les colonnes x, y, PointType et PointWeight.
+
+```{r}
+points_df <- with(X, data.frame(x, y, marks))
+head(points_df)
+```
+
+## Jeu de points
+
+La fonction `wmppp()` permet de créer le jeu de points à partir du tableau.
+La fenêtre est créée automatiquement si elle n'est pas précisée.
+Ici, c'est un carré de côté 1.
+
+```{r}
+library("dbmss")
+X <- wmppp(points_df, window = square(1))
+```
+
+La fonction `Mhat()` permet d'estimer la fonction.
+
+```{r}
+X %>% 
+  Mhat(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  autoplot()
+```
+
+La fonction `Menvelope()` permet de calculer l'intervalle de confiance de la valeur de la fonction sous l'hypothèse nulle de localisation aléatoire des points.
+
+```{r}
+X %>% 
+  MEnvelope(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  autoplot()
+```
+
+## Matrice de distances
+
+La fonction `as.Dtable()` permet de créer un objet `Dtable`.
+
+```{r}
+d_matrix <- as.Dtable(points_df)
+```
+
+Il peut aussi être crée à partir d'une matrice de distances obtenue autrement, contenant par exemple des distances non euclidiennes (temps de transport, distance routière...).
+
+```{r}
+# A Dtable containing two points
+Dmatrix <- matrix(c(0, 1, 1, 0), nrow = 2)
+PointType <- c("Type1", "Type2")
+PointWeight <- c(2, 3)
+Dtable(Dmatrix, PointType, PointWeight)
+```
+
+Les fonctions `Mhat()` et `MEnvelope()` sont les mêmes que pour les jeux de points.
+
+```{r}
+identical(
+  Mhat(X, r = r, ReferenceType = "Case", NeighborType = "Control"),
+  Mhat(d_matrix, r = r, ReferenceType = "Case", NeighborType = "Control")
+)
+```
+
+
+```{r}
+d_matrix %>% 
+  MEnvelope(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  autoplot()
+```
+
+## Performance
+
+Les deux traitements nécessitent un temps de calcul proche, légèrement inférieur pour le jeu de points.
+Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet est finalement plus long.
+
+```{r}
+library("microbenchmark")
+(
+  mb <- microbenchmark(
+    Mhat(X, r = r, ReferenceType = "Case", NeighborType = "Control"),
+    Mhat(d_matrix, r = r, ReferenceType = "Case", NeighborType = "Control"),
+    times = 4L
+  )
+)
+```
+
+
+# Tests
+
 La fonction `X_to_M()` calcule la fonction M et renvoie le vecteur de ses valeurs pour chaque distance.
+Elle est utile pour mesurer les temps d'exécution.
 
 ```{r}
 # Compute M
@@ -268,9 +360,6 @@ X_to_M <- function(X) {
   pull("M")
 }
 ```
-
-
-# Tests
 
 ## CSR
 
