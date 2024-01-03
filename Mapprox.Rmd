@@ -351,8 +351,9 @@ d_matrix %>%
 
 ## Performance
 
-Les deux traitements nécessitent un temps de calcul proche, légèrement inférieur pour le jeu de points.
-Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet est finalement plus long.
+Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long sur GitHub (où ce document est produit), probablement parce que la mémoire est limitée.
+En revanche, le calcul est 5 fois plus rapide sur un ordinateur  sous Windows avec suffisamment de mémoire.
+
 
 ```{r}
 library("microbenchmark")
@@ -586,7 +587,7 @@ summary(M_time_lm)
 ```
 
 Le temps de calcul augmente moins vite que le carré du nombre de points.
-Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r as.integer(M_time[5, 1])`) pour $n_0$ points (ex.: `r format(as.numeric(M_time[4, 2]), digits=3)`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
+Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r format(as.numeric(M_time[5, 2]), digits=3)`) pour $n_0$ points (ex.: `r as.integer(M_time[5, 1])`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
 
 
 ## Mémoire
@@ -631,7 +632,7 @@ Pour un jeu de cinq millions de points, le temps de calcul attendu est $6 \times
 
 Le calcul des distances est parallélisé: un serveur de calcul augmente drastiquement la performance.
 
-Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à caculer des intervalles de confiance.
+Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à calculer des intervalles de confiance.
 
 Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
 Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une précision dégradée jusqu'à environ 5 fois cette échelle dans le pire des cas, c'est-à-dire l'absence de structure spatiale.
