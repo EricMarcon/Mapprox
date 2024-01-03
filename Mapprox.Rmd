@@ -280,7 +280,11 @@ Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de cl
 Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
 
 ```{r}
-points_df <- with(X, data.frame(x, y, marks))
+X %>% 
+  # Reduce to 10000 points
+  rthin(P = 1E4 / points_nb) %>% 
+  with(data.frame(x, y, marks)) ->
+  points_df
 head(points_df)
 ```
 
@@ -606,12 +610,15 @@ M_ram %>%
     geom_point() +
     geom_line()
 ```
+
 La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points et n'est jamais critique pour des tailles de jeux de points traitables dans des temps raisonnables.
 
 ```{r}
 # Model
 lm(RAM ~ Size, data = M_ram) %>% summary()
 ```
+
+La mémoire utilisée par les objets `Dtable` pour le calcul de $M$ à partir d'une matrice de distance est bien supérieure: c'est celle d'une matrice numérique, de l'ordre de 8 octets fois le nombre de points au carré, soit 800 Mo pour 10000 points seulement.
 
 
 # Conclusion
