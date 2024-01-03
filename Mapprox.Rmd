@@ -4,7 +4,7 @@ author:
   - name: "Eric Marcon"
   - name: "Florence Puech"
 abstract: >
-  Ce document teste l'impact de l'approximation de la position des points sur la précision de M et le temps de calcul.
+  Ce document teste l'impact de l'approximation de la position des points sur la précision de $M$ et le temps de calcul.
   Dans un deuxième temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sont évalués.
 date: "`r format(Sys.time(), '%d %B %Y')`"
 url: https://EricMarcon.github.io/Mapprox/
@@ -102,11 +102,28 @@ knitr::opts_chunk$set(dev.args=list(bg="transparent"))
 set.seed(973)
 ```
 
-# Tirage des points
+# Motivation
+
+Ce document montre comment utiliser le package *dbmss* [@Marcon2014] pour calculer la fonction $M$ [@Marcon2010] et teste l'impact de l'approximation du calcul proposée par @Tidu2023.
+
+La première section fournit le code nécessaire à la création de données.
+Des jeux de points de grande taille (de l'ordre de 100000 points) complètement aléatoires ou concentrés sont tirés.
+L'approximation de leur position consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent.
+
+La deuxième section détaille l'utilisation de *dbmss* pour calculer la fonction $M$ et son intervalle de confiance à partir d'un tableau donnant la position et les caractéristiques des points ou bien une matrice de distance entre eux.
+
+La troisième section teste l'impact de l'approximation des points.
+
+Enfin, la quatrième section mesure la performance de *dbmss* en fonction de la taille du jeu de points.
+
+
+# Données
+
+## Tirage des points
 
 Un jeu de points est tiré par un processus binomial dans une fenêtre carrée de côté 1.
 La majorité des points constitue les "contrôles" et une partie constitue les "cas", dont la structure spatiale est étudiée.
-Le poids des points est tiré dans une [loi gamma](https://fr.wikipedia.org/wiki/Loi_Gamma) dont les paramètre de forme et d'écelle sont libres.
+Le poids des points est tiré dans une [loi gamma](https://fr.wikipedia.org/wiki/Loi_Gamma) dont les paramètre de forme et d’échelle sont libres.
 
 
 Les paramètres sont:
@@ -164,6 +181,10 @@ hist(
 ```
 
 La fonction `X_matern()` permet de tirer un semis de points dont les cas sont concentrés par un processus de Matérn.
+Les paramètres sont:
+
+- $\kappa$: le nombre d'aggrégats attendu,
+- `scale`: leur rayon.
 
 ```{r}
 # Expected number of clusters
@@ -172,6 +193,7 @@ kappa <- 20
 scale <-  0.1
 ```
 
+Le code de la fonction est le suivant:
 
 ```{r}
 X_matern <- function(points_nb) {
@@ -212,7 +234,7 @@ autoplot(X[X$marks$PointType == "Case"])
 ```
 
 
-# Grille
+## Grille
 
 La fenêtre est découpée en une grille dont le nombre de cellules est `partitions` au carré.
 
@@ -220,7 +242,7 @@ La fenêtre est découpée en une grille dont le nombre de cellules est `partiti
 partitions <- 20
 ```
 
-La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient pour mimer l'approximation habituelle de la position des points d'une unité administrative par la position de son centroïde.
+La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient pour mimer l'approximation habituelle de la position des points d'une unité administrative par la position de son centre.
 
 ```{r}
 # Group points into cells
@@ -250,6 +272,7 @@ Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids es
 group_points(X, partitions) %>% autoplot(alpha = 0.5)
 ```
 
+
 # Calcul de M
 
 Les distances auxquelles la fonction *M* est calculées sont choisies dans `r`.
@@ -260,9 +283,9 @@ r <- c((0:9) / 100, (2:10) / 20)
 
 ## Données nécessaires
 
-Dans le package dbmss, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distance, objet de classe `Dtable`.
+Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distance, objet de classe `Dtable`.
 
-Nous partons d'un tableau (data.frame) contenant les colonnes x, y, PointType et PointWeight.
+Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
 
 ```{r}
 points_df <- with(X, data.frame(x, y, marks))
@@ -349,7 +372,7 @@ library("microbenchmark")
 
 # Tests
 
-La fonction `X_to_M()` calcule la fonction M et renvoie le vecteur de ses valeurs pour chaque distance.
+La fonction `X_to_M()` calcule la fonction $M$ et renvoie le vecteur de ses valeurs pour chaque distance.
 Elle est utile pour mesurer les temps d'exécution.
 
 ```{r}
@@ -391,7 +414,7 @@ system.time(M_csr_grouped <- sapply(X_csr_grouped_list, X_to_M))
 
 Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
 
-La corrélation entre les valeurs de M calculées par chaque méthode est calculée à chaque distance.
+La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
 
 ```{r}
 # Correlation
@@ -440,20 +463,20 @@ sapply(r, M_bias, M_original = M_csr_original, M_grouped = M_csr_grouped) %>%
     geom_errorbar(aes(x = r, ymin = 0, ymax = `M CV`), col = "red")
 ```
 
-La valeur moyenne de M est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
+La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
 
-Les barres rouges représentent l'écart-type empirique de la valeur de M, calculé à partir des simulations.
-Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de M calculées avec ou sans approximation.
+Les barres rouges représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
+Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
 Les barres d'erreur sont l'écart-type de cette différence.
 
-L'approximation surestime systématiquement M, au point de détecter une concentration spatiale qui n'existe pas.
+L'approximation surestime systématiquement $M$, au point de détecter une concentration spatiale qui n'existe pas.
 L'erreur est importante jusqu'à la taille de la grille: tous les points d'une même cellule sont concentrés artificiellement en son centre.
 Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 5 ou 6 fois la taille de la grille.
 
 L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
 
-Le test effectué ici est beaucoup plus sévère que dans l'article: les points n'ont aucune structure, donc M permet de détecter les petites variations aléatoires des différents tirages.
-En présence d'une structure spatiale, les valeurs de M sont nettement mieux corrélées.
+Le test effectué ici est beaucoup plus sévère que dans l'article: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
+En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées.
 
 
 ## Matérn
@@ -475,7 +498,7 @@ X_matern_grouped_list <- lapply(X_matern_list, group_points, partitions = partit
 system.time(M_matern_grouped <- sapply(X_matern_grouped_list, X_to_M))
 ```
 
-La corrélation entre les valeurs de M calculées par chaque méthode est calculée à chaque distance.
+La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
 
 ```{r}
 # Correlation
@@ -511,7 +534,9 @@ sapply(r, M_bias, M_original = M_matern_original, M_grouped = M_matern_grouped) 
 La corrélation est très élevée dès que la distance prise en compte dépasse le double de la maille de la grille et les erreurs sont assez faibles.
 
 
-# Temps de calcul de M
+# Performance de M
+
+## Temps de calcul
 
 Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
 
@@ -528,7 +553,6 @@ test_time <-function(points_nb) {
   microbenchmark(X_to_M(X), times = 4L) %>% 
     pull("time")
 }
-
 
 X_sizes %>% 
   sapply(test_time) %>% 
@@ -569,7 +593,7 @@ Le temps de calcul augmente moins vite que le carré du nombre de points.
 Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r as.integer(M_time[5, 1])`) pour $n_0$ points (ex.: `r format(as.numeric(M_time[4, 2]), digits=3)`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
 
 
-# Mémoire de M
+## Mémoire
 
 La mémoire utilisée est évaluée pour les mêmes tailles de données.
 
@@ -600,7 +624,7 @@ lm(RAM ~ Size, data = M_ram) %>% summary()
 
 # Conclusion
 
-Le temps de calcul de M est de l'ordre de 6 secondes pour un jeu de 100 000 points sur un ordinateur portable (processeur Intel i7-1360P 2.20 GHz), et nécessite 25 Mo de RAM.
+Le temps de calcul de $M$ est de l'ordre de 6 secondes pour un jeu de 100 000 points sur un ordinateur portable (processeur Intel i7-1360P 2.20 GHz), et nécessite 25 Mo de RAM.
 Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc moins de deux heures.
 
 Pour un jeu de cinq millions de points, le temps de calcul attendu est $6 \times 50^{1.8} = 6860$ secondes, près de deux heures.
@@ -612,3 +636,6 @@ Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^
 
 Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
 Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une précision dégradée jusqu'à environ 5 fois cette échelle dans le pire des cas, c'est-à-dire l'absence de structure spatiale.
+
+
+`r if (!knitr:::is_latex_output()) '# References {-}'`
