@@ -45,7 +45,7 @@ InstallPackages <- function(Packages) {
       install.packages(Package, repos="https://cran.rstudio.com/")
     }
   }
-  invisible(sapply(Packages, InstallPackage))
+  invisible(sapply(Packages, FUN = InstallPackage))
 }
 
 # Basic packages
@@ -126,10 +126,10 @@ Les paramètres sont:
 
 ```{r}
 #| label: Parametres
-points_nb <- 40000
-case_ratio <- 1/20
-size_gamma_shape <- 0.95
-size_gamma_scale  <- 10
+par_points_nb <- 40000
+par_case_ratio <- 1/20
+par_size_gamma_shape <- 0.95
+par_size_gamma_scale  <- 10
 ```
 
 
@@ -140,7 +140,11 @@ L'argument `points_nb` qui fixe le nombre de points peut être modifé; les autr
 library("tidyverse")
 library("spatstat")
 library("dbmss")
-X_csr <- function(points_nb) {
+X_csr <- function(
+    points_nb,
+    case_ratio = par_case_ratio,
+    size_gamma_shape = par_size_gamma_shape,
+    size_gamma_scale = par_size_gamma_scale) {
   points_nb %>% 
     runifpoint() %>% 
     as.wmppp() ->
@@ -150,18 +154,18 @@ X_csr <- function(points_nb) {
   c(rep("Control", controls_nb), rep("Case", cases_nb)) %>% 
     as.factor() ->
     X$marks$PointType
-  X$marks$PointWeight <- ceiling(
-    rgamma(
-      points_nb, 
-      shape = size_gamma_shape, 
-      scale = size_gamma_scale
-    )
-  )
+  rgamma(
+    X$n, 
+    shape = size_gamma_shape, 
+    scale = size_gamma_scale
+  ) %>% 
+    ceiling() ->
+    X$marks$PointWeight
   X
 }
 
 # Example
-X <- X_csr(points_nb)
+X <- X_csr(par_points_nb)
 # Map the cases
 autoplot(X[X$marks$PointType == "Case"])
 # Point size distribution
@@ -169,7 +173,8 @@ hist(
   X$marks$PointWeight, 
   breaks = unique(X$marks$PointWeight), 
   main = "",
-  xlab = "Point size")
+  xlab = "Point size"
+)
 ```
 
 La fonction `X_matern()` permet de tirer un semis de points dont les cas sont concentrés par un processus de Matérn.
@@ -180,15 +185,21 @@ Les paramètres sont:
 
 ```{r}
 # Expected number of clusters
-kappa <- 20
+par_kappa <- 20
 # Cluster radius
-scale <-  0.1
+par_scale <-  0.1
 ```
 
 Le code de la fonction est le suivant:
 
 ```{r}
-X_matern <- function(points_nb) {
+X_matern <- function(
+    points_nb,
+    case_ratio = par_case_ratio,
+    kappa = par_kappa,
+    scale = par_scale,
+    size_gamma_shape = par_size_gamma_shape,
+    size_gamma_scale = par_size_gamma_scale) {
   cases_nb <- round(points_nb *  case_ratio)
   controls_nb <- points_nb - cases_nb
   # CSR controls
@@ -209,18 +220,18 @@ X_matern <- function(points_nb) {
   c(rep("Control", controls_nb), rep("Case", cases_nb)) %>% 
     as.factor() ->
     X$marks$PointType
-  X$marks$PointWeight <- ceiling(
-    rgamma(
-      X$n, 
-      shape = size_gamma_shape, 
-      scale = size_gamma_scale
-    )
-  )
+  rgamma(
+    X$n, 
+    shape = size_gamma_shape, 
+    scale = size_gamma_scale
+  ) %>% 
+    ceiling() ->
+    X$marks$PointWeight
   X
 }
 
 # Example
-X <- X_matern(points_nb)
+X <- X_matern(par_points_nb)
 # Map the cases
 autoplot(X[X$marks$PointType == "Case"])
 ```
@@ -231,14 +242,14 @@ autoplot(X[X$marks$PointType == "Case"])
 La fenêtre est découpée en une grille dont le nombre de cellules est `partitions` au carré.
 
 ```{r}
-partitions <- 20
+par_partitions <- 20
 ```
 
 La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient pour mimer l'approximation habituelle de la position des points d'une unité administrative par la position de son centre.
 
 ```{r}
 # Group points into cells
-group_points <- function(X, partitions) {
+group_points <- function(X, partitions = par_partitions) {
 X %>%
   with(tibble(
     x, 
@@ -261,7 +272,7 @@ La position approximative est présentée sur la carte suivante.
 Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids est la somme de ceux des points individuels.
 
 ```{r}
-group_points(X, partitions) %>% autoplot(alpha = 0.5)
+group_points(X) %>% autoplot(alpha = 0.5)
 ```
 
 
@@ -280,9 +291,8 @@ Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de cl
 Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
 
 ```{r}
-X %>% 
-  # Reduce to 10000 points
-  rthin(P = 1E4 / points_nb) %>% 
+# Draw 10000 points and make a dataframe
+X_matern(points_nb = 1E4) %>% 
   with(data.frame(x, y, marks)) ->
   points_df
 head(points_df)
@@ -297,21 +307,23 @@ Ici, c'est un carré de côté 1.
 ```{r}
 library("dbmss")
 X <- wmppp(points_df, window = square(1))
+autoplot(X)
 ```
 
 La fonction `Mhat()` permet d'estimer la fonction.
 
 ```{r}
 X %>% 
-  Mhat(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  Mhat(r = r, ReferenceType = "Case") %>% 
   autoplot()
 ```
 
 La fonction `Menvelope()` permet de calculer l'intervalle de confiance de la valeur de la fonction sous l'hypothèse nulle de localisation aléatoire des points.
+L'intervalle de confiance global [@Duranton2005] est calculé en précisant l'argument `Global = TRUE`.
 
 ```{r}
 X %>% 
-  MEnvelope(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  MEnvelope(r = r, ReferenceType = "Case", Global = TRUE) %>% 
   autoplot()
 ```
 
@@ -345,7 +357,7 @@ identical(
 
 ```{r}
 d_matrix %>% 
-  MEnvelope(r = r, ReferenceType = "Case", NeighborType = "Control") %>% 
+  MEnvelope(r = r, ReferenceType = "Case", Global = TRUE) %>% 
   autoplot()
 ```
 
@@ -376,7 +388,7 @@ Elle est utile pour mesurer les temps d'exécution.
 # Compute M
 X_to_M <- function(X) {
   X %>% 
-  Mhat(r = r, ReferenceType = "Case", NeighborType  = "Control") %>% 
+  Mhat(r = r, ReferenceType = "Case") %>% 
   pull("M")
 }
 ```
@@ -393,7 +405,7 @@ simulations_n <- 10
 
 ```{r}
 # Simulate X
-X_csr_list <- replicate(simulations_n, X_csr(points_nb), simplify = FALSE)
+X_csr_list <- replicate(simulations_n, X_csr(par_points_nb), simplify = FALSE)
 ```
 
 Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
@@ -401,12 +413,16 @@ Pour évaluer l'effet de l'approximation de la position, le calcul exact et le c
 ```{r}
 library("pbapply")
 # Compute M
-system.time(M_csr_original <- pbsapply(X_csr_list, X_to_M))
+system.time(M_csr_original <- pbsapply(X_csr_list, FUN = X_to_M))
 
 # Group points and compute M
-X_csr_grouped_list <- lapply(X_csr_list, group_points, partitions = partitions)
+X_csr_grouped_list <- lapply(
+  X_csr_list, 
+  FUN = group_points, 
+  partitions = par_partitions
+)
 # Compute M
-system.time(M_csr_grouped <- sapply(X_csr_grouped_list, X_to_M))
+system.time(M_csr_grouped <- sapply(X_csr_grouped_list, FUN = X_to_M))
 ```
 
 Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
@@ -422,7 +438,12 @@ M_cor <- function(r_value, M_original, M_grouped) {
     cor(M_original[r_index, ], M_grouped[r_index, ])
   ) 
 }
-sapply(r, M_cor, M_original = M_csr_original, M_grouped = M_csr_grouped) %>%
+sapply(
+  r, 
+  FUN = M_cor, 
+  M_original = M_csr_original, 
+  M_grouped = M_csr_grouped
+) %>%
   t() %>% 
   as_tibble() %>% 
   rename(r = V1, correlation = V2) %>% 
@@ -444,7 +465,11 @@ M_bias <- function(r_value, M_original, M_grouped) {
     sd(M_original[r_index, ] / mean(M_original[r_index, ]))
   )
 }
-sapply(r, M_bias, M_original = M_csr_original, M_grouped = M_csr_grouped) %>% 
+sapply(
+  r, FUN = M_bias, 
+  M_original = M_csr_original, 
+  M_grouped = M_csr_grouped
+) %>% 
   t() %>% 
   as_tibble() %>% 
   rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
@@ -480,26 +505,39 @@ En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux c
 
 ```{r}
 # Simulate X
-X_matern_list <- replicate(simulations_n, X_matern(points_nb), simplify = FALSE)
+X_matern_list <- replicate(
+  simulations_n, 
+  X_matern(par_points_nb), 
+  simplify = FALSE
+)
 ```
 
 Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
 
 ```{r}
 # Compute M
-system.time(M_matern_original <- pbsapply(X_matern_list, X_to_M))
+system.time(M_matern_original <- pbsapply(X_matern_list, FUN = X_to_M))
 
 # Group points and compute M
-X_matern_grouped_list <- lapply(X_matern_list, group_points, partitions = partitions)
+X_matern_grouped_list <- lapply(
+  X_matern_list, 
+  FUN = group_points, 
+  partitions = par_partitions
+)
 # Compute M
-system.time(M_matern_grouped <- sapply(X_matern_grouped_list, X_to_M))
+system.time(M_matern_grouped <- sapply(X_matern_grouped_list, FUN = X_to_M))
 ```
 
 La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
 
 ```{r}
 # Correlation
-sapply(r, M_cor, M_original = M_matern_original, M_grouped = M_matern_grouped) %>%
+sapply(
+  r, 
+  FUN = M_cor, 
+  M_original = M_matern_original, 
+  M_grouped = M_matern_grouped
+) %>%
   t() %>% 
   as_tibble() %>% 
   rename(r = V1, correlation = V2) %>% 
@@ -512,7 +550,12 @@ Les valeurs sont comparées.
 
 ```{r}
 # Compare values
-sapply(r, M_bias, M_original = M_matern_original, M_grouped = M_matern_grouped) %>% 
+sapply(
+  r, 
+  FUN = M_bias, 
+  M_original = M_matern_original, 
+  M_grouped = M_matern_grouped
+) %>% 
   t() %>% 
   as_tibble() %>% 
   rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
@@ -545,14 +588,14 @@ La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluat
 
 ```{r}
 library("microbenchmark")
-test_time <-function(points_nb) {
+test_time <- function(points_nb) {
   X <- X_csr(points_nb)
   microbenchmark(X_to_M(X), times = 4L) %>% 
     pull("time")
 }
 
 X_sizes %>% 
-  sapply(test_time) %>% 
+  sapply(FUN = test_time) %>% 
   as_tibble() %>% 
   pivot_longer(cols = everything()) %>% 
   rename(Size = name) %>% 
@@ -562,7 +605,7 @@ X_sizes %>%
     Size = as.double(
       plyr::mapvalues(
         .$Size, 
-        from = paste0("V",seq_along(X_sizes)), 
+        from = paste0("V", seq_along(X_sizes)), 
         to = X_sizes
       )
     )
@@ -603,7 +646,7 @@ test_ram <-function(points_nb) {
     pull("bytes") %>% 
     sum()
 }
-sapply(X_sizes, test_ram) %>% 
+sapply(X_sizes, FUN = test_ram) %>% 
   tibble(Size = X_sizes, RAM = . / 2^20) ->
   M_ram
 M_ram %>% 
