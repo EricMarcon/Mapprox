@@ -363,8 +363,7 @@ d_matrix %>%
 
 ## Performance
 
-Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long sur GitHub (où ce document est produit), probablement parce que la mémoire est limitée.
-En revanche, le calcul est 5 fois plus rapide sur un ordinateur  sous Windows avec suffisamment de mémoire.
+Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long.
 
 
 ```{r}
@@ -388,12 +387,10 @@ Elle est utile pour mesurer les temps d'exécution.
 # Compute M
 X_to_M <- function(X) {
   X %>% 
-  Mhat(r = r, ReferenceType = "Case") %>% 
-  pull("M")
+    Mhat(r = r, ReferenceType = "Case") %>% 
+    pull("M")
 }
 ```
-
-## CSR
 
 Le nombre de répétition des tests est fixé par `simulations_n`.
 
@@ -401,113 +398,18 @@ Le nombre de répétition des tests est fixé par `simulations_n`.
 simulations_n <- 10
 ```
 
-`X_csr_list` contient `simulations_n` tirages du jeu de points.
-
-```{r}
-# Simulate X
-X_csr_list <- replicate(simulations_n, X_csr(par_points_nb), simplify = FALSE)
-```
-
-Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
-
-```{r}
-library("pbapply")
-# Compute M
-system.time(M_csr_original <- pbsapply(X_csr_list, FUN = X_to_M))
-
-# Group points and compute M
-X_csr_grouped_list <- lapply(
-  X_csr_list, 
-  FUN = group_points, 
-  partitions = par_partitions
-)
-# Compute M
-system.time(M_csr_grouped <- sapply(X_csr_grouped_list, FUN = X_to_M))
-```
-
-Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
-
-La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
-
-```{r}
-# Correlation
-M_cor <- function(r_value, M_original, M_grouped) {
-  r_index <- which(r == r_value)
-  c(
-    r_value,
-    cor(M_original[r_index, ], M_grouped[r_index, ])
-  ) 
-}
-sapply(
-  r, 
-  FUN = M_cor, 
-  M_original = M_csr_original, 
-  M_grouped = M_csr_grouped
-) %>%
-  t() %>% 
-  as_tibble() %>% 
-  rename(r = V1, correlation = V2) %>% 
-  ggplot(aes(x = r, y = correlation)) +
-    geom_point() +
-    geom_line()
-```
-
-Les valeurs sont comparées.
-
-```{r}
-# Compare values
-M_bias <- function(r_value, M_original, M_grouped) {
-  r_index <- which(r == r_value)
-    c(
-    r_value,
-    mean((M_grouped[r_index, ] - M_original[r_index, ]) / M_original[r_index, ]),
-    sd(M_grouped[r_index, ] - M_original[r_index, ]) / mean(M_grouped[r_index, ]), 
-    sd(M_original[r_index, ] / mean(M_original[r_index, ]))
-  )
-}
-sapply(
-  r, FUN = M_bias, 
-  M_original = M_csr_original, 
-  M_grouped = M_csr_grouped
-) %>% 
-  t() %>% 
-  as_tibble() %>% 
-  rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
-  ggplot() +
-    geom_point(aes(x = r, y = `Relative error`)) +
-    geom_errorbar(
-      aes(
-        x = r, 
-        ymin = `Relative error` - `Error CV`, 
-        ymax = `Relative error` + `Error CV`
-      )
-    ) +
-    geom_errorbar(aes(x = r, ymin = 0, ymax = `M CV`), col = "red")
-```
-
-La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
-
-Les barres rouges représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
-Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
-Les barres d'erreur sont l'écart-type de cette différence.
-
-L'approximation surestime systématiquement $M$, au point de détecter une concentration spatiale qui n'existe pas.
-L'erreur est importante jusqu'à la taille de la grille: tous les points d'une même cellule sont concentrés artificiellement en son centre.
-Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 5 ou 6 fois la taille de la grille.
-
-L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
-
-Le test effectué ici est beaucoup plus sévère que dans l'article: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
-En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées.
-
+L'effet de l'approximation de la localisation est testé d'abord sur un jeu de points agrégé, similaire aux données réelles de @Tidu2023.
+Dans un deuxième temps, le cas d'un jeu de points non structuré est traité.
 
 ## Matérn
+
+`X_matern_list` contient `simulations_n` tirages du jeu de points.
 
 ```{r}
 # Simulate X
 X_matern_list <- replicate(
   simulations_n, 
-  X_matern(par_points_nb), 
+  expr = X_matern(par_points_nb), 
   simplify = FALSE
 )
 ```
@@ -515,6 +417,7 @@ X_matern_list <- replicate(
 Pour évaluer l'effet de l'approximation de la position, le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
 
 ```{r}
+library("pbapply")
 # Compute M
 system.time(M_matern_original <- pbsapply(X_matern_list, FUN = X_to_M))
 
@@ -528,10 +431,40 @@ X_matern_grouped_list <- lapply(
 system.time(M_matern_grouped <- sapply(X_matern_grouped_list, FUN = X_to_M))
 ```
 
+Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
+
+Les valeurs moyennes sont présentées ci-dessous.
+
+```{r}
+tibble(
+  r,
+  Original = rowMeans(M_matern_original), 
+  Grouped =  rowMeans(M_matern_grouped)
+) %>% 
+  pivot_longer(
+    cols = !r,
+    names_to = "M", 
+    values_to = "value"
+  ) %>% 
+  ggplot(aes(x = r, y = value, color = M)) +
+  geom_line() +
+  geom_point()
+```
+
 La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
 
 ```{r}
 # Correlation
+M_cor <- function(r_value, M_original, M_grouped) {
+  r_index <- which(r == r_value)
+  # Return
+  c(
+    # Distance
+    r_value,
+    # Correlation
+    cor(M_original[r_index, ], M_grouped[r_index, ])
+  ) 
+}
 sapply(
   r, 
   FUN = M_cor, 
@@ -546,10 +479,25 @@ sapply(
     geom_line()
 ```
 
-Les valeurs sont comparées.
+La corrélation est très élevée dès que la distance prise en compte dépasse la maille de la grille.
+Les valeurs sont ensuite comparées.
 
 ```{r}
 # Compare values
+M_bias <- function(r_value, M_original, M_grouped) {
+  r_index <- which(r == r_value)
+  # Return
+  c(
+    # Distance
+    r_value,
+    # Relative error
+    mean((M_grouped[r_index, ] - M_original[r_index, ]) / M_original[r_index, ]),
+    # Standardised error sd
+    sd(M_grouped[r_index, ] - M_original[r_index, ]) / mean(M_grouped[r_index, ]), 
+    # Coefficient of variation
+    sd(M_original[r_index, ] / mean(M_original[r_index, ]))
+  )
+}
 sapply(
   r, 
   FUN = M_bias, 
@@ -568,10 +516,119 @@ sapply(
         ymax = `Relative error` + `Error CV`
       )
     ) +
-    geom_errorbar(aes(x = r, ymin = 0, ymax = `M CV`), col = "red")
+    geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
-La corrélation est très élevée dès que la distance prise en compte dépasse le double de la maille de la grille et les erreurs sont assez faibles.
+La figure montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
+Par définition, la valeur moyenne est sans erreur.
+L'erreur relative (à la valeur exacte de $M$) moyenne est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
+
+Bien que les corrélations soient très grandes, l'erreur relative dépasse 25% jusqu'à 2 fois la taille de la maille.
+
+## CSR
+
+`X_csr_list` contient `simulations_n` tirages du jeu de points.
+
+```{r}
+# Simulate X
+X_csr_list <- replicate(
+  simulations_n, 
+  expr = X_csr(par_points_nb), 
+  simplify = FALSE
+)
+```
+
+Le calcul exact et le calcul sur les points de la grille sont effectués sur chaque jeu de points.
+
+```{r}
+# Compute M
+system.time(M_csr_original <- pbsapply(X_csr_list, FUN = X_to_M))
+
+# Group points and compute M
+X_csr_grouped_list <- lapply(
+  X_csr_list, 
+  FUN = group_points, 
+  partitions = par_partitions
+)
+# Compute M
+system.time(M_csr_grouped <- sapply(X_csr_grouped_list, FUN = X_to_M))
+```
+
+Les valeurs moyennes sont présentées ci-dessous.
+
+```{r}
+tibble(
+  r,
+  Original = rowMeans(M_csr_original), 
+  Grouped =  rowMeans(M_csr_grouped)
+) %>% 
+  pivot_longer(
+    cols = !r,
+    names_to = "M", 
+    values_to = "value"
+  ) %>% 
+  ggplot(aes(x = r, y = value, color = M)) +
+  geom_line() +
+  geom_point()
+```
+
+La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
+
+```{r}
+# Correlation
+sapply(
+  r, 
+  FUN = M_cor, 
+  M_original = M_csr_original, 
+  M_grouped = M_csr_grouped
+) %>%
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, correlation = V2) %>% 
+  ggplot(aes(x = r, y = correlation)) +
+    geom_point() +
+    geom_line()
+```
+En absence de structure spatiale, les corrélations sont bien plus faibles.
+
+Les valeurs sont comparées.
+
+```{r}
+# Compare values
+sapply(
+  r, FUN = M_bias, 
+  M_original = M_csr_original, 
+  M_grouped = M_csr_grouped
+) %>% 
+  t() %>% 
+  as_tibble() %>% 
+  rename(r = V1, `Relative error` = V2, `Error CV` = V3, `M CV` = V4) %>% 
+  ggplot() +
+    geom_point(aes(x = r, y = `Relative error`)) +
+    geom_errorbar(
+      aes(
+        x = r, 
+        ymin = `Relative error` - `Error CV`, 
+        ymax = `Relative error` + `Error CV`
+      )
+    ) +
+    geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
+```
+
+La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
+
+Les barres rouges représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
+Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
+Les barres d'erreur sont l'écart-type de cette différence.
+
+L'approximation sous-estime systématiquement $M$.
+L'erreur est maximale jusqu'à la taille de la grille: tous les points d'une même cellule sont placés artificiellement en son centre.
+Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 4 fois la taille de la grille.
+
+L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
+
+Le test sur les corrélations effectué ici est beaucoup plus sévère que dans @Tidu2023: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
+En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées, mais dans tous les cas l'erreur d'estimation est grande.
 
 
 # Performance de M
@@ -678,7 +735,8 @@ Le calcul des distances est parallélisé: un serveur de calcul augmente drastiq
 Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à calculer des intervalles de confiance.
 
 Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
-Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une précision dégradée jusqu'à environ 5 fois cette échelle dans le pire des cas, c'est-à-dire l'absence de structure spatiale.
+Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une erreur relative importante.
+Si les valeurs de $M$ sont utilisées comme covariables dans un modèle (par exemple pour expliquer la croissance des points), alors cette imprécision est acceptable parce que la corrélation entre leur valeur exacte et leur valeur approximée est élevée, dès que les points présentent une structure spatiale.
 
 
 `r if (!knitr:::is_latex_output()) '# References {-}'`
