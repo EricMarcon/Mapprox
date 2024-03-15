@@ -4,8 +4,12 @@ author:
   - name: "Eric Marcon"
   - name: "Florence Puech"
 abstract: >
-  Ce document teste l'impact de l'approximation de la position des points sur la précision de $M$ et le temps de calcul.
-  Dans un deuxième temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sont évalués.
+  Cet article méthodologique porte sur une mesure relative de la concentration spatiale en espace continu, la fonction $M$, proposée par @Marcon2010.
+  L'objectif de notre contribution est d'apporter des réponses au traitement de jeu de données spatialisées de grande taille avec M sous R. 
+  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: l'estimation des erreurs liées à l'approximation de la position géographique des observations et les délais de calcul. 
+  Dans un premier temps, nous testons l'impact de l'approximation de la position géographique sur la précision de M et du temps de calcul associé, comme proposé par @Tidu2023. 
+  Dans un second temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sous R sont évalués. 
+  Le code R est fourni pour la reproductibilité des résultats.
 date: "`r format(Sys.time(), '%d %B %Y')`"
 url: https://EricMarcon.github.io/Mapprox/
 github-repo: EricMarcon/Mapprox
@@ -28,6 +32,7 @@ output:
   rmdformats::downcute:
     use_bookdown: yes
     lightbox: yes
+    code_folding: show
     pandoc_args: "--lua-filter=fr-nbsp.lua"
   bookdown::pdf_book:
     template: latex/template.tex
@@ -96,33 +101,47 @@ set.seed(973)
 
 # Motivation
 
-Ce document montre comment utiliser le package *dbmss* [@Marcon2014] pour calculer la fonction $M$ [@Marcon2010] et teste l'impact de l'approximation du calcul proposée par @Tidu2023.
+L'accès grandissant à d'importants jeux de données individuelles et spatialisées et une plus grande puissance de calcul ont encouragé le développement d'outils d'analyse statistiques permettant de traiter au mieux de telles données [Baddeley2016a]. 
+Des études empiriques à des niveaux géographiques très fins ont ainsi pu été proposées au cours des dernières années pour des jeux de données de grande taille. 
+Une attention particulière a porté sur la détection des structures spatiales (attraction, répulsion, indépendance) de données individuelles spatialisées à partir d'analyses ne reposant plus des données zonées mais sur des données géolocalisées. 
+Ce type d'approche a l'avantage de préserver les positions exactes des entités analysées  et par conséquent de ne pas gommer les spécificités individuelles. 
+Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998, @Deurloo2008], en économie [@Arbia1989, @Marcon2003a], en écologie [@Cressie1993,@Lentz2011],  en biologie [@Dray2021] etc.
+Dans un article récent, @Tidu2023 soulignent tout l'intérêt d'une mesure statistique particulière, la fonction M proposée par @Marcon2010. 
+Cette mesure, que nous dénommerons *M* dans la suite de l'article, permet de mettre en évidence et les structures spatiales au sein d'une distribution spatialisée (attraction, répulsion, indépendance) à partir d'une étude fondée sur les distances séparant les entités analysées. 
+Toutefois, si cette mesure permet de préserver toute la richesse des données individuelles géolocalisées, elle nécessite un temps de calcul plus long que d'autres mesures fondées sur les distances puisqu'elle est à la fois une mesure cumulative et relative (voir @Marcon2012c pour une revue de littérature sur les avantages et les limites d'une dizaine mesures existantes fondées sur les distances). 
+@Tidu2023 proposent de limiter les temps de calculs de *M* en introduisant une erreur de positionnement volontaire des entités analysées. 
+Ainsi, dans leur étude, les établissements industriels en Sardaigne (Italie) ne sont plus localisés à leur adresse postale exacte mais au centroïde de leur municipalité. 
+Ce repositionnement permet de réduire les temps de calcul car le nombre de distances possibles entre les établissements est, de fait, limité aux distances séparant les centroïdes des communes. 
+Dans notre article, nous proposons dans un premier temps d'étudier la généralisation de cette méthode d'approximation géographique des localisations des entités analysées.
+Ce travail méthodologique reposant sur un nombre d'emplacements des entités volontairement limité permettra de quantifier l'importance de la détérioration de l'information que cette approche crée. 
+Dans un second temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour effectuer ces approximations.
 
-La première section fournit le code nécessaire à la création de données.
-Des jeux de points de grande taille (de l'ordre de 100000 points) complètement aléatoires ou concentrés sont tirés.
-L'approximation de leur position consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent.
-
-La deuxième section détaille l'utilisation de *dbmss* pour calculer la fonction $M$ et son intervalle de confiance à partir d'un tableau donnant la position et les caractéristiques des points ou bien une matrice de distance entre eux.
-
-La troisième section teste l'impact de l'approximation des points.
-
-Enfin, la quatrième section mesure la performance de *dbmss* en fonction de la taille du jeu de points.
+Le plan de l'article est le suivant. 
+Une première section fournit le code nécessaire à la création de jeux de données. 
+Des jeux de points de grande taille (de l'ordre de 100 000 points) complètement aléatoires ou (géographiquement) concentrés sont tirés. 
+L'approximation de leur position consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent. 
+La deuxième section détaille l'utilisation du package *dbmss* pour calculer la fonction *M* et son intervalle de confiance à partir d'un tableau donnant la position et les caractéristiques des points ou bien une matrice de distances entre eux. 
+La troisième section teste l'impact de l'approximation des points. 
+Enfin, la dernière section mesure la performance de *dbmss* en fonction de la taille du jeu de points.
 
 
-# Données
+# Simulation des données
+
+Les jeux de données que nous allons considérer dans cet article sont obtenus par simulation. 
+Le code R est donné, ce qui permet une parfaite reproductibilité les exemples traités (ou d'en développer d'autres).
 
 ## Tirage des points
 
-Un jeu de points est tiré par un processus binomial dans une fenêtre carrée de côté 1.
-La majorité des points constitue les "contrôles" et une partie constitue les "cas", dont la structure spatiale est étudiée.
-Le poids des points est tiré dans une [loi gamma](https://fr.wikipedia.org/wiki/Loi_Gamma) dont les paramètre de forme et d’échelle sont libres.
-
+Un jeu de points est tiré par un processus binomial dans une fenêtre carrée de côté 1. 
+On associe à chaque point une marque qualitative: "Cas" ou "Contrôle". 
+La majorité des points sont des "Contrôles" et une partie constitue des "Cas", dont la structure spatiale est étudiée. 
+Le poids des points est tiré dans une loi gamma dont les paramètres de forme et d'échelle sont libres.
 
 Les paramètres sont:
 
-- le nombre de points,
-- la proportion de contrôles,
-- la forme et l'échelle de la loi gamma.
+-   le nombre de points,
+-   la proportion de contrôles,
+-   la forme et l'échelle de la loi gamma.
 
 ```{r}
 #| label: Parametres
@@ -132,9 +151,10 @@ par_size_gamma_shape <- 0.95
 par_size_gamma_scale  <- 10
 ```
 
+Dans notre exemple, 40 000 points sont tirés et un point sur vingt est un Cas.
 
-La fonction `X_csr()` permet de tirer un semis de points selon les paramètres.
-L'argument `points_nb` qui fixe le nombre de points peut être modifé; les autres paramètres ont leur valeur fixée plus haut.
+La fonction `X_csr()` permet de tirer un semis de points selon des paramètres déterminés.
+L'argument `points_nb` qui fixe le nombre de points peut être modifié; les autres paramètres ont leur valeur fixée plus haut.
 
 ```{r}
 library("tidyverse")
@@ -168,6 +188,15 @@ X_csr <- function(
 X <- X_csr(par_points_nb)
 # Map the cases
 autoplot(X[X$marks$PointType == "Case"])
+```
+
+Seuls les points "Cas" sont représentés sur la fenêtre ci-dessus. 
+La taille des points est une marque quantitative (`Weight`): graphiquement la surface des points est proportionnelle à la taille des points. 
+Etant donné le grand nombre de Cas sur la fenêtre, la distribution de la taille de ces points n'est que peu lisible. 
+Une analyse complémentaire est nécessaire.
+
+
+```{r}
 # Point size distribution
 hist(
   X$marks$PointWeight, 
@@ -177,11 +206,14 @@ hist(
 )
 ```
 
-La fonction `X_matern()` permet de tirer un semis de points dont les cas sont concentrés par un processus de Matérn.
+Dans cet exemple, le tirage des points est complètement aléatoire (*complete spatial randomness*: CSR), c'est-à-dire qu'il n'y a pas ici de simulation d'attraction ou de dispersion de points qui pourraient générer des concentrations spatiales de points (agrégats) ou, au contraire, des régularités spatiales (dispersions).
+
+
+La fonction `X_matern()` permet de tirer un semis de points dont les Cas sont concentrés par un processus de @Matern1960.
 Les paramètres sont:
 
-- $\kappa$: le nombre d'aggrégats attendu,
-- `scale`: leur rayon.
+-   $\kappa$: le nombre d'agrégats attendu,
+-   `scale`: leur rayon.
 
 ```{r}
 # Expected number of clusters
@@ -236,16 +268,21 @@ X <- X_matern(par_points_nb)
 autoplot(X[X$marks$PointType == "Case"])
 ```
 
+Les Cas apparaissent dans la fenêtre ci-dessus : les agrégats des Cas sont nettement visibles.
 
-## Grille
 
-La fenêtre est découpée en une grille dont le nombre de cellules est `partitions` au carré.
+## Maillage de l'espace
+
+Considérons la simulation des Cas obtenus par le processus de processus de Matérn et découpons la fenêtre en une grille. 
+Un maillage est de l'espace précédemment considéré est obtenu.
 
 ```{r}
+# Number of rows and columns
 par_partitions <- 20
 ```
 
-La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient pour mimer l'approximation habituelle de la position des points d'une unité administrative par la position de son centre.
+La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient.
+Cela permet de simuler l'approximation habituelle de la position des points d'une unité administrative sur la position de son centre.
 
 ```{r}
 # Group points into cells
@@ -268,13 +305,13 @@ X %>%
 }
 ```
 
-La position approximative est présentée sur la carte suivante.
-Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids est la somme de ceux des points individuels.
+La position recentrée est présentée sur la carte suivante. 
+Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids est la somme des poids des points individuels. 
+L'absence de Cas dans une cellule est aisément détectable (point unicolore bleu), tout comme la forte présence de Cas dans une cellule (point bicolore mais à dominante rouge).
 
 ```{r}
 group_points(X) %>% autoplot(alpha = 0.5)
 ```
-
 
 # Calcul de M
 
@@ -289,6 +326,9 @@ r <- c((0:9) / 100, (2:10) / 20)
 Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distance, objet de classe `Dtable`.
 
 Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
+
+Les coordonnées spatiales des points sont données par les colonnes `x` et `y`. 
+Aucune grille n'est considérée dans un premier temps.
 
 ```{r}
 # Draw 10000 points and make a dataframe
@@ -311,6 +351,10 @@ autoplot(X)
 ```
 
 La fonction `Mhat()` permet d'estimer la fonction.
+La valeur de référence théorique de *M* est 1 car cette fonction rapporte la proportion de Cas jusqu'à une distance $r$ à celle observée sur toute la fenêtre. 
+L'agrégation des Cas sera mise en évidence par des valeurs de *M* supérieures à 1 (la présence relative de Cas est plus importante localement que sur l'ensemble de la fenêtre) et la dispersion des Cas par des valeurs inférieures à 1. 
+On observe que *M* détecte une agglomération des Cas, ce qui est en accord avec la simulation de ce type de points (les contrôles ayant localisation complètement aléatoire sur la fenêtre). 
+L'avantage d'une fonction fondée sur les distances est nettement visible: elle permet de détecter exactement à quelle(s) distance(s) les phénomènes d'attraction se produisent et sont les plus importants (pour les fonctions dont les valeurs peuvent être comparées à différents rayons, comme *M*).
 
 ```{r}
 X %>% 
@@ -320,6 +364,7 @@ X %>%
 
 La fonction `Menvelope()` permet de calculer l'intervalle de confiance de la valeur de la fonction sous l'hypothèse nulle de localisation aléatoire des points.
 L'intervalle de confiance global [@Duranton2005] est calculé en précisant l'argument `Global = TRUE`.
+Sur le graphique ci-dessous, l'intervalle de confiance, simulé à 95%, apparaît en gris et est centré sur la valeur 1.
 
 ```{r}
 X %>% 
@@ -335,7 +380,7 @@ La fonction `as.Dtable()` permet de créer un objet `Dtable`.
 d_matrix <- as.Dtable(points_df)
 ```
 
-Il peut aussi être crée à partir d'une matrice de distances obtenue autrement, contenant par exemple des distances non euclidiennes (temps de transport, distance routière...).
+Il peut aussi être créé à partir d'une matrice de distances obtenue autrement, contenant par exemple des distances non euclidiennes (temps de transport, distance routière...).
 
 ```{r}
 # A Dtable containing two points
@@ -354,7 +399,6 @@ identical(
 )
 ```
 
-
 ```{r}
 d_matrix %>% 
   MEnvelope(r = r, ReferenceType = "Case", Global = TRUE) %>% 
@@ -363,8 +407,8 @@ d_matrix %>%
 
 ## Performance
 
+Le package *microbenchmark* proposé par @Mersmann est retenu pour chronométrer le temps d'exécution de la fonction *M*.
 Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long.
-
 
 ```{r}
 library("microbenchmark")
@@ -376,7 +420,6 @@ library("microbenchmark")
   )
 )
 ```
-
 
 # Tests
 
@@ -401,7 +444,7 @@ simulations_n <- 10
 L'effet de l'approximation de la localisation est testé d'abord sur un jeu de points agrégé, similaire aux données réelles de @Tidu2023.
 Dans un deuxième temps, le cas d'un jeu de points non structuré est traité.
 
-## Matérn
+## Cas d'une distribution agrégée (Matérn)
 
 `X_matern_list` contient `simulations_n` tirages du jeu de points.
 
@@ -431,7 +474,7 @@ X_matern_grouped_list <- lapply(
 system.time(M_matern_grouped <- sapply(X_matern_grouped_list, FUN = X_to_M))
 ```
 
-Le calcul approximé est très rapide parce qu'il réduit le nombre de points au double du nombre de cellules.
+Le calcul approximé est très rapide parce qu'il réduit le nombre de points à celui du nombre de cellules.
 
 Les valeurs moyennes sont présentées ci-dessous.
 
@@ -451,7 +494,7 @@ tibble(
   geom_point()
 ```
 
-La corrélation entre les valeurs de $M$ calculées par chaque méthode est calculée à chaque distance.
+La corrélation entre les valeurs de $M$ estimées par chaque méthode est calculée à chaque distance.
 
 ```{r}
 # Correlation
@@ -519,13 +562,13 @@ sapply(
     geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
-La figure montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
+La figure ci-dessus montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
 Par définition, la valeur moyenne est sans erreur.
 L'erreur relative (à la valeur exacte de $M$) moyenne est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
 
 Bien que les corrélations soient très grandes, l'erreur relative dépasse 25% jusqu'à 2 fois la taille de la maille.
 
-## CSR
+## Cas d'une distribution complètement aléatoire (CSR)
 
 `X_csr_list` contient `simulations_n` tirages du jeu de points.
 
@@ -589,6 +632,7 @@ sapply(
     geom_point() +
     geom_line()
 ```
+
 En absence de structure spatiale, les corrélations sont bien plus faibles.
 
 Les valeurs sont comparées.
@@ -615,21 +659,20 @@ sapply(
     geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
-La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont complètement aléatoires.
+La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont distribués complètement aléatoirement.
 
-Les barres rouges représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
+Les barres rouges sur la figure ci-dessus représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
 Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
 Les barres d'erreur sont l'écart-type de cette différence.
 
-L'approximation sous-estime systématiquement $M$.
+On constate que l'approximation sous-estime systématiquement $M$.
 L'erreur est maximale jusqu'à la taille de la grille: tous les points d'une même cellule sont placés artificiellement en son centre.
 Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 4 fois la taille de la grille.
 
-L'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
+Notre conclusion prudente dans ce cas est que l'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
 
 Le test sur les corrélations effectué ici est beaucoup plus sévère que dans @Tidu2023: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
 En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées, mais dans tous les cas l'erreur d'estimation est grande.
-
 
 # Performance de M
 
@@ -689,7 +732,6 @@ summary(M_time_lm)
 Le temps de calcul augmente moins vite que le carré du nombre de points.
 Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r format(as.numeric(M_time[5, 2]), digits=3)`) pour $n_0$ points (ex.: `r as.integer(M_time[5, 1])`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
 
-
 ## Mémoire
 
 La mémoire utilisée est évaluée pour les mêmes tailles de données.
@@ -713,6 +755,7 @@ M_ram %>%
 ```
 
 La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points et n'est jamais critique pour des tailles de jeux de points traitables dans des temps raisonnables.
+Cela permet de relativiser la conclusion de @Tidu2023 sur la puissance et le temps de calculs nécessaires en utilisant *M* sur des jeux de données de taille importante.
 
 ```{r}
 # Model
@@ -721,7 +764,6 @@ lm(RAM ~ Size, data = M_ram) %>% summary()
 
 La mémoire utilisée par les objets `Dtable` pour le calcul de $M$ à partir d'une matrice de distance est bien supérieure: c'est celle d'une matrice numérique, de l'ordre de 8 octets fois le nombre de points au carré, soit 800 Mo pour 10000 points seulement.
 
-
 # Conclusion
 
 Le temps de calcul de $M$ est de l'ordre de 6 secondes pour un jeu de 100 000 points sur un ordinateur portable (processeur Intel i7-1360P 2.20 GHz), et nécessite 25 Mo de RAM.
@@ -729,14 +771,12 @@ Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc 
 
 Pour un jeu de cinq millions de points, le temps de calcul attendu est $6 \times 50^{1.8} = 6860$ secondes, près de deux heures.
 1000 simulations nécessiteraient alors environ trois mois.
+Le calcul des distances est parallélisé: un serveur de calcul augmenterait drastiquement la performance mais au prix d'une complexité de mise en oeuvre qui limite son usage.
 
-Le calcul des distances est parallélisé: un serveur de calcul augmente drastiquement la performance.
-
-Le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à calculer des intervalles de confiance.
+En se limitant à la puissance de calcul d'un ordinateur personnel, le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à calculer des intervalles de confiance.
 
 Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
 Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une erreur relative importante.
 Si les valeurs de $M$ sont utilisées comme covariables dans un modèle (par exemple pour expliquer la croissance des points), alors cette imprécision est acceptable parce que la corrélation entre leur valeur exacte et leur valeur approximée est élevée, dès que les points présentent une structure spatiale.
-
 
 `r if (!knitr:::is_latex_output()) '# References {-}'`
