@@ -125,8 +125,8 @@ Ce travail méthodologique reposant sur un nombre d'emplacements des entités vo
 Dans un second temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour effectuer ces approximations.
 
 Le plan de l'article est le suivant. 
-Une première section fournit le code nécessaire à la création de jeux de données. 
-Des jeux de points de grande taille (de l'ordre de 100 000 points) complètement aléatoires ou (géographiquement) concentrés sont tirés. 
+Une première section génère les données nécessaires. 
+Des jeux de points de grande taille (de l'ordre de plusieurs dizaines de milliers de points) complètement aléatoires ou (géographiquement) concentrés sont tirés. 
 L'approximation de leur position consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent. 
 La deuxième section détaille l'utilisation du package *dbmss* pour calculer la fonction *M* et son intervalle de confiance à partir d'un tableau donnant la position et les caractéristiques des points ou bien une matrice de distances entre eux. 
 La troisième section teste l'impact de l'approximation des points. 
@@ -136,7 +136,7 @@ Enfin, la dernière section mesure la performance de *dbmss* en fonction de la t
 # Simulation des données
 
 Les jeux de données que nous allons considérer dans cet article sont obtenus par simulation. 
-Le code R est donné en annexe, ce qui permet une parfaite reproductibilité les exemples traités (ou d'en développer d'autres).
+Le code R est donné en annexe, ce qui permet une parfaite reproductibilité les exemples traités ou d'en développer d'autres.
 
 ## Tirage des points
 
@@ -151,29 +151,10 @@ Le poids des points est tiré dans une loi gamma dont les paramètres de forme e
 #| ref.label: ParamsCSRCode
 ```
 
-Dans notre exemple, 40 000 points sont tirés et un point sur vingt est un Cas.
-
-(ref:Xcsr) Tirage d'un jeu de points complètement aléatoire. Seuls les cas (un point sur 20) sont représentés.
-
 ```{r}
-#| label: XcsrFig
-#| echo: false
-#| ref.label: XcsrCode
-#| fig.cap: "(ref:Xcsr)"
-```
-
-Seuls les points "Cas" sont représentés sur dans la figure  \@ref(fig:XcsrFig). 
-La taille des points est une marque quantitative (`Weight`): graphiquement la surface des points est proportionnelle à la taille des points. 
-Etant donné le grand nombre de Cas sur la fenêtre, la distribution de la taille de ces points n'est que peu lisible. 
-Sa distribution est donnée en figure \@ref(fig:PointSizeFig).
-
-(ref:PointSize) Distribution de la taille des cas.
-
-```{r}
-#| label: PointSizeFig
+#| label: XCSR
 #| include: false
-#| ref.label: PointSizeCode
-#| fig.cap: "(ref:PointSize)"
+#| ref.label: XcsrCode
 ```
 
 Dans cet exemple, le tirage des points est complètement aléatoire (*complete spatial randomness*: CSR), c'est-à-dire qu'il n'y a pas ici de simulation d'attraction ou de dispersion de points qui pourraient générer des concentrations spatiales de points (agrégats) ou, au contraire, des régularités spatiales (dispersions).
@@ -186,7 +167,7 @@ Des jeux de points agrégés peuvent être tirés dans un processus de @Matern19
 #| ref.label: ParamsMaternCode
 ```
 
-(ref:XMatern) Tirage d'un jeu de points dont les cas (représentés) sont agrégés. 
+(ref:XMatern) Tirage d'un jeu de points dont les cas (en rouge) sont agrégés alors que les contrôles (en bleu) sont distribués complèteent aléatoirement. La taille des points est proportionnelle à leur poids. 
 
 ```{r}
 #| label: XMaternFig
@@ -228,8 +209,10 @@ Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids es
 #| fig.cap: "(ref:Grouped)"
 ```
 
+Les valeurs de la fonction *M* peuvent maintenant être calculées à partir du jeu de point original ou de son approximation après recentrage. 
 
-# Calcul de M
+
+# Calcul de M avec le package *dbmss*
 
 ```{r}
 #| label: Paramsr
@@ -240,7 +223,8 @@ Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids es
 ## Données nécessaires
 
 Dans le package *dbmss*, la fonction s'applique à un jeu de points ou à une matrice de distance.
-Un jeu de points dont les Cas sont agrégé selon les paramètres utilisés précédemment est tiré, et la matrice de distances entre toutes les paires de ses points est calculée pour constituer les données sur lesquelles les tests de performance seront réalisés.
+Le jeu de points de la figure \@ref(fig:XMaternFig) est utilisé.
+La matrice de distances entre toutes les paires de ses points est calculée pour constituer les données sur lesquelles les tests de performance seront réalisés.
 
 ```{r}
 #| label: DtableM
@@ -250,19 +234,14 @@ Un jeu de points dont les Cas sont agrégé selon les paramètres utilisés pré
 
 ## Jeu de points
 
-```{r}
-#| label: PointSetM
-#| include: false
-#| ref.label: PointSetMCode
-```
-
 La fonction `Mhat()` du package *dbmss* permet d'estimer la fonction *M*.
 La valeur de référence théorique de *M* est 1 car cette fonction rapporte la proportion de Cas jusqu'à une distance $r$ à celle observée sur toute la fenêtre. 
 L'agrégation des Cas sera mise en évidence par des valeurs de *M* supérieures à 1 (la présence relative de Cas est plus importante localement que sur l'ensemble de la fenêtre) et la dispersion des Cas par des valeurs inférieures à 1. 
 On observe (figure \@ref(fig:MFig)) que *M* détecte une agglomération des Cas, ce qui est en accord avec la simulation de ce type de points (les contrôles ayant localisation complètement aléatoire sur la fenêtre). 
 L'avantage d'une fonction fondée sur les distances est nettement visible: elle permet de détecter exactement à quelle(s) distance(s) les phénomènes d'attraction se produisent et sont les plus importants (pour les fonctions dont les valeurs peuvent être comparées à différents rayons, comme *M*).
 
-La fonction `Menvelope()` permet de calculer l'intervalle de confiance global [@Duranton2005] de la valeur de la fonction sous l'hypothèse nulle de localisation aléatoire des points.
+La fonction `Menvelope()` permet de calculer en plus de l'estimation de la fonction *M* son intervalle de confiance global [@Duranton2005] sous l'hypothèse nulle de localisation aléatoire des points.
+Son résultat est représenté sur la figure \@ref(fig:MFig).
 
 (ref:M) Valeur de *M* en fonction de la distance au point de référence. l'intervalle de confiance, simulé à 95%, apparaît en gris et est centré sur la valeur 1.
 
@@ -284,33 +263,12 @@ La fonction `Menvelope()` permet de calculer l'intervalle de confiance global [@
 
 Les matrices permettent de traiter des distances non euclidiennes (temps de transport, distance routière...) qui ne peuvent pas être représentées par un jeu de points.
 
-Les fonctions `Mhat()` et `MEnvelope()` sont les mêmes, et fournissent les mêmes résultats quelle que soit la forme des données utilisée ici.
+Les fonctions `Mhat()` et `MEnvelope()` sont les mêmes, et fournissent les mêmes résultats quelle que soit la forme des données utilisées ici (jeu de point ou matrice de distance).
 
 
-## Performance
+# Performance du calcul
 
-Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long (tableau \@ref(tab:MmbTab)).
-
-```{r}
-#| label: Mmb
-#| include: false
-#| ref.label: MmbCode
-```
-
-```{r}
-#| label: MmbTab
-#| echo: false
-mb |> summary() |> as.data.frame() |>
-  select(expr, median) |> 
-  knitr::kable(
-    caption = "Temps d'exécution médian de l'estimation de la fonction M, à partir d'un jeu de points ou d'une matrice de distances", 
-    longtable = FALSE, 
-    booktabs = TRUE
-  ) %>%
-  kableExtra::kable_styling(bootstrap_options = "striped", full_width = TRUE)
-```
-
-# Tests
+L'utilisation de la fonction *M* pour caractériser la structure spatiale de grands jeux de points peut être limitée par le temps de calcul ou la mémoire nécessaire.
 
 ```{r}
 #| label: XtoM
@@ -318,11 +276,101 @@ mb |> summary() |> as.data.frame() |>
 #| ref.label: XtoMCode
 ```
 
+## Temps de calcul
+
+Le calcul des distances entre toutes les paires de points est nécessaire pour estimer *M*.
+On s'attend donc à ce que le temps de calcul augmente comme le carré du nombre de points.
+
+Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points (figure \@ref(fig:TestTimeFig)).
+
+```{r}
+#| label: ParamsXSize
+#| include: false
+#| ref.label: ParamsXSizeCode
+```
+
+(ref:TestTime) Temps de calcul de l'estimation de la fonction *M* en fonction de la taille du jeu de points. Les barres représentent l'intervalle de $\pm 1$ écart-type.
+
+```{r}
+#| label: TestTimeFig
+#| echo: false
+#| ref.label: TestTimeCode
+#| fig.cap: "(ref:TestTime)"
+```
+
+
+Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
+
+```{r}
+#| label: TimeModel
+#| include: false
+#| ref.label: TimeModelCode
+```
+
+Il augmente moins vite que le carré du nombre de points.
+Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r format(as.numeric(M_time[5, 2]), digits=3)` secondes) pour $n_0$ points (ex.: `r as.integer(M_time[5, 1])`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
+
+L'utilisation d'une matrice de distance peut sembler efficace pour en économiser le temps de calcul mais le calcul des distances est en réalité extrêmement rapide et le traitement complet à partir d'une matrice est finalement plus long (tableau \@ref(tab:MmbTab)).
+
+```{r}
+#| label: Mmb
+#| include: false
+#| ref.label: MmbCode
+```
+
+
+```{r}
+#| label: MmbTab
+#| echo: false
+mb |> summary() |> as.data.frame() |>
+  select(expr, median) |> 
+  knitr::kable(
+    caption = paste(
+      "Temps d'exécution médian, en millisecondes, de l'estimation", 
+      "de la fonction *M* à partir d'un jeu de",
+      par_points_nb,
+      "points ou de la matrice de distances correspondante"
+    ),
+    longtable = FALSE, 
+    booktabs = TRUE
+  ) %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = TRUE)
+```
+
+
+
+
+## Mémoire
+
+La mémoire utilisée est évaluée pour les mêmes tailles de données (figure \@ref(fig:TestMemFig)).
+
+(ref:TestMem) Mémoire nécessaire (Mo) pour l'estimation de la fonction *M* en fonction de la taille du jeu de points.
+
+```{r}
+#| label: TestMemFig
+#| echo: false
+#| ref.label: TestMemCode
+#| fig.cap: "(ref:TestMem)"
+```
+
+La mémoire nécessaire augmente linéairement avec le nombre de points et n'est jamais critique pour des tailles de jeux de points traitables dans des temps raisonnables.
+Cela permet de relativiser la conclusion de @Tidu2023 sur la puissance et le temps de calculs nécessaires en utilisant *M* sur des jeux de données de taille importante.
+
+La mémoire utilisée par les objets `Dtable` pour le calcul de $M$ à partir d'une matrice de distance est bien supérieure: c'est celle d'une matrice numérique, de l'ordre de 8 octets fois le nombre de points au carré, soit 800 Mo pour 10000 points seulement.
+Comme le temps de calcul n'est pas réduit par cette approche, son utilisation est à réserver aux distances non-euclidiennes.
+
+
+
+# Effets de l'approximation de la position des points
+
 ```{r}
 #| label: ParamsSims
 #| include: false
 #| ref.label: ParamsSimsCode
 ```
+
+Il est évident que l'approximation de la position des points entraîne une perte d'information: dans chaque cellule de la grille, la distance entre tous les points est fixée à 0,et la distance entre deux points de cellules différentes est approchée par celle entre les centroïdes des deux cellules.
+On s'attend donc à une sévère erreur dans l'estimation de *M* à petite échelle (de l'ordre de grandeur des la taille des cellules) et une erreur diminuant avec la distance, quand la taille relative des cellules diminue.
 
 L'effet de l'approximation de la localisation est testé d'abord sur un jeu de points agrégé, similaire aux données réelles de @Tidu2023.
 Dans un deuxième temps, le cas d'un jeu de points non structuré est traité.
@@ -355,6 +403,9 @@ Les valeurs moyennes des estimations de *M* sont présentées dans la figure \@r
 #| fig.cap: "(ref:MapproxMatern)"
 ```
 
+La taille des cellules de la grille est égale à `r 1/par_partitions`.
+Tous les voisins à distance inférieure à cette distance sont supprimés: l'estimation de la fonction n'est pas correcte.
+
 La corrélation entre les valeurs de $M$ estimées par chaque méthode est calculée à chaque distance (figure \@ref(fig:CorMaternFig)).
 
 (ref:CorMatern) Corrélation entre les valeurs de *M* estimées à partir de la position exacte des points et en regroupant les points.
@@ -366,24 +417,7 @@ La corrélation entre les valeurs de $M$ estimées par chaque méthode est calcu
 #| fig.cap: "(ref:CorMatern)"
 ```
 
-La corrélation est très élevée dès que la distance prise en compte dépasse la maille de la grille.
-
-Les valeurs sont ensuite comparées.
-La figure \@ref(fig:CompMaternFig) montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
-Par définition, la valeur moyenne est sans erreur.
-L'erreur relative (à la valeur exacte de $M$) moyenne est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
-
-(ref:CorMatern) Comparaison des valeurs de *M* estimées à partir de la position exacte des points et en regroupant les points.
-
-```{r}
-#| label: CompMaternFig
-#| echo: false
-#| ref.label: CompMaternCode
-#| fig.cap: "(ref:CompMatern)"
-```
-
-
-Bien que les corrélations soient très grandes, l'erreur relative dépasse 25% jusqu'à 2 fois la taille de la maille.
+La corrélation est très proche de 1 dès que la distance prise en compte dépasse la maille de la grille: si la valeur exacte de la fonction *M* importe peu mais que ses variations en fonction de la distance sont utiles, par exemple en tant que covariable dans un modèle, alors l'approximation n'est pas un problème.
 
 
 ## Cas d'une distribution complètement aléatoire (CSR)
@@ -423,82 +457,9 @@ Les valeurs moyennes sont présentées dans la figure \@ref(fig:MapproxCSRFig).
 #| fig.cap: "(ref:CorCSR)"
 ```
 
+La valeur moyenne de $M$ est égale à 1 à toutes les distances par construction: les cas et les contrôles sont distribués complètement aléatoirement.
+
 En absence de structure spatiale, les corrélations sont bien plus faibles (figure \@ref(fig:CorCSRFig)).
-
-(ref:CompCSR) Comparaison des valeurs de *M* estimées à partir de la position exacte des points et en regroupant les points.
-
-```{r}
-#| label: CompCSRFig
-#| echo: false
-#| ref.label: CompCSRCode
-#| fig.cap: "(ref:CompCSR)"
-```
-
-La valeur moyenne de $M$ est 1 à toutes les distances par construction: les cas et les contrôles sont distribués complètement aléatoirement.
-
-Les barres rouges sur la figure \@ref(fig:CompCSRFig) représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
-Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
-Les barres d'erreur sont l'écart-type de cette différence.
-
-On constate que l'approximation sous-estime systématiquement $M$.
-L'erreur est maximale jusqu'à la taille de la grille: tous les points d'une même cellule sont placés artificiellement en son centre.
-Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 4 fois la taille de la grille.
-
-Notre conclusion prudente dans ce cas est que l'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
-
-Le test sur les corrélations effectué ici est beaucoup plus sévère que dans @Tidu2023: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
-En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées, mais dans tous les cas l'erreur d'estimation est grande.
-
-# Performance de M
-
-## Temps de calcul
-
-Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de nombres de points (figure \@ref(fig:TestTimeFig)).
-
-```{r}
-#| label: ParamsXSize
-#| include: false
-#| ref.label: ParamsXSizeCode
-```
-
-(ref:TestTime) Temps de calcul de l'estimation de la fonction *M* en fonction de la taille du jeu de points.
-
-```{r}
-#| label: TestTimeFig
-#| echo: false
-#| ref.label: TestTimeCode
-#| fig.cap: "(ref:TestTime)"
-```
-
-
-Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
-
-```{r}
-#| label: TimeModel
-#| include: false
-#| ref.label: TimeModelCode
-```
-
-Il augmente moins vite que le carré du nombre de points.
-Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r format(as.numeric(M_time[5, 2]), digits=3)`) pour $n_0$ points (ex.: `r as.integer(M_time[5, 1])`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
-
-## Mémoire
-
-La mémoire utilisée est évaluée pour les mêmes tailles de données (figure \@ref(fig:TestMemFig)).
-
-(ref:TestMem) Mémoire nécessaire pour l'estimation de la fonction *M* en fonction de la taille du jeu de points.
-
-```{r}
-#| label: TestMemFig
-#| echo: false
-#| ref.label: TestMemCode
-#| fig.cap: "(ref:TestMem)"
-```
-
-La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points et n'est jamais critique pour des tailles de jeux de points traitables dans des temps raisonnables.
-Cela permet de relativiser la conclusion de @Tidu2023 sur la puissance et le temps de calculs nécessaires en utilisant *M* sur des jeux de données de taille importante.
-
-La mémoire utilisée par les objets `Dtable` pour le calcul de $M$ à partir d'une matrice de distance est bien supérieure: c'est celle d'une matrice numérique, de l'ordre de 8 octets fois le nombre de points au carré, soit 800 Mo pour 10000 points seulement.
 
 
 # Conclusion
@@ -525,6 +486,13 @@ Le code utilisé dans cet article est détaillé ici.
 
 ### Tirage des points
 
+```{r}
+#| label: seed
+#| echo: off
+# Random seed, identical to that of the text
+set.seed(973)
+```
+
 Un jeu de points est tiré aléatoirement avec les paramètres suivants:
 
 -   le nombre de points,
@@ -533,8 +501,11 @@ Un jeu de points est tiré aléatoirement avec les paramètres suivants:
 
 ```{r}
 #| label: ParamsCSRCode
-#| eval: false
-par_points_nb <- 40000
+library("tidyverse")
+library("spatstat")
+library("dbmss")
+
+par_points_nb <- 5000
 par_case_ratio <- 1/20
 par_size_gamma_shape <- 0.95
 par_size_gamma_scale  <- 10
@@ -545,10 +516,6 @@ L'argument `points_nb` qui fixe le nombre de points peut être modifié; les aut
 
 ```{r}
 #| label: XcsrCode
-#| eval: false
-library("tidyverse")
-library("spatstat")
-library("dbmss")
 X_csr <- function(
     points_nb,
     case_ratio = par_case_ratio,
@@ -584,7 +551,6 @@ La distribution des tailles est donnée par l'histogramme suivant:
 
 ```{r}
 #| label: PointSizeCode
-#| eval: false
 # Point size distribution
 hist(
   X$marks$PointWeight, 
@@ -602,7 +568,6 @@ Les paramètres sont:
 
 ```{r}
 #| label: ParamsMaternCode
-#| eval: false
 # Expected number of clusters
 par_kappa <- 20
 # Cluster radius
@@ -613,7 +578,6 @@ Le code de la fonction est le suivant:
 
 ```{r}
 #| label: XMaternCode
-#| eval: false
 X_matern <- function(
     points_nb,
     case_ratio = par_case_ratio,
@@ -654,7 +618,8 @@ X_matern <- function(
 # Example
 X <- X_matern(par_points_nb)
 # Map the cases
-autoplot(X[X$marks$PointType == "Case"])
+autoplot(X) + 
+  scale_size(range = c(0, 3))
 ```
 
 
@@ -664,7 +629,6 @@ Le nombre de lignes et de colonnes est paramétré:
 
 ```{r}
 #| label: ParamsPartitionsCode
-#| eval: false
 # Number of rows and columns
 par_partitions <- 20
 ```
@@ -674,7 +638,6 @@ Cela permet de simuler l'approximation habituelle de la position des points d'un
 
 ```{r}
 #| label: group_pointsCode
-#| eval: false
 # Group points into cells
 group_points <- function(X, partitions = par_partitions) {
 X %>%
@@ -698,7 +661,6 @@ X %>%
 La figure est obtenue par le code suivant:
 ```{r}
 #| label: GroupedCode
-#| eval: false
 group_points(X) %>% autoplot(alpha = 0.5)
 ```
 
@@ -709,7 +671,6 @@ Les distances auxquelles la fonction *M* est calculées sont choisies dans `r`.
 
 ```{r}
 #| label: ParamsrCode
-#| eval: false
 r <- c((0:9) / 100, (2:10) / 20)
 ```
 
@@ -720,37 +681,20 @@ Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de cl
 Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
 
 Les coordonnées spatiales des points sont données par les colonnes `x` et `y`. 
-Aucune grille n'est considérée dans un premier temps.
 
 ```{r}
 #| label: DtableMCode
-#| eval: true
-# Draw 10000 points and make a dataframe
-X_matern(points_nb = 1E4) %>% 
-  with(data.frame(x, y, marks)) ->
-  points_df
+# Extract a dataframe from the point set
+points_df <- with(X, data.frame(x, y, marks))
 head(points_df)
 ```
 
 ### Jeu de points
 
-La fonction `wmppp()` permet de créer le jeu de points à partir du tableau.
-La fenêtre est créée automatiquement si elle n'est pas précisée.
-Ici, c'est un carré de côté 1.
-
-```{r}
-#| label: PointSetMCode
-#| eval: true
-library("dbmss")
-X <- wmppp(points_df, window = square(1))
-autoplot(X)
-```
-
 La fonction `Mhat()` permet d'estimer la valeur de la fonction *M*.
 
 ```{r}
 #| label: Mhat
-#| eval: true
 X %>% 
   Mhat(r = r, ReferenceType = "Case") %>% 
   autoplot()
@@ -761,7 +705,6 @@ L'intervalle de confiance global [@Duranton2005] est calculé en précisant l'ar
 
 ```{r}
 #| label: MCode
-#| eval: true
 X %>% 
   MEnvelope(r = r, ReferenceType = "Case", Global = TRUE) %>% 
   autoplot()
@@ -773,7 +716,6 @@ La fonction `as.Dtable()` permet de créer un objet `Dtable`.
 
 ```{r}
 #| label: DtableCode
-#| eval: false
 d_matrix <- as.Dtable(points_df)
 ```
 
@@ -809,9 +751,81 @@ d_matrix %>%
 ```
 
 
-### Performance
 
-Le package *microbenchmark* proposé par @Mersmann2023 est retenu pour chronométrer le temps d'exécution de la fonction *M*.
+## Performance de M
+
+La fonction `X_to_M()` calcule la fonction $M$ et renvoie le vecteur de ses valeurs pour chaque distance.
+Elle est utile pour mesurer les temps d'exécution.
+
+```{r}
+#| label: XtoMCode
+# Compute M
+X_to_M <- function(X) {
+  X %>% 
+    Mhat(r = r, ReferenceType = "Case") %>% 
+    pull("M")
+}
+```
+
+### Temps de calcul
+
+Le temps nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
+
+```{r}
+#| label: ParamsXSizeCode
+X_sizes <- c(1000, 5000, 10000, 50000, 100000)
+```
+
+La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluation de la fonction $M$.
+
+```{r}
+#| label: TestTimeCode
+library("microbenchmark")
+test_time <- function(points_nb) {
+  X <- X_csr(points_nb)
+  microbenchmark(X_to_M(X), times = 4L) %>% 
+    pull("time")
+}
+
+X_sizes %>% 
+  sapply(FUN = test_time) %>% 
+  as_tibble() %>% 
+  pivot_longer(cols = everything()) %>% 
+  rename(Size = name) %>% 
+  group_by(Size) %>% 
+  summarise(Time = mean(value) / 1E9, sd = sd(value) / 1E9) %>% 
+  mutate(
+    Size = as.double(
+      plyr::mapvalues(
+        .$Size, 
+        from = paste0("V", seq_along(X_sizes)), 
+        to = X_sizes
+      )
+    )
+  ) -> M_time
+M_time %>% 
+  ggplot(aes(x = Size, y = Time)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = Time - sd, ymax = Time + sd)) +
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
+
+```{r}
+#| label: TimeModelCode
+# Model
+M_time %>% 
+  mutate(logTime = log(Time), logSize = log(Size)) ->
+  M_time_log
+M_time_lm <- lm(logTime ~ logSize, data = M_time_log) 
+summary(M_time_lm)
+```
+
+
+Le package *microbenchmark* proposé par @Mersmann2023 est retenu pour comparer le temps de calcul de la fonction entre un jeu de points et une matrice de distances.
+
 Le calcul des distances est extrêmement rapide dans la fonction `Mhat()`: la matrice le fait économiser, mais le traitement complet à partir d'une matrice est finalement plus long.
 
 ```{r}
@@ -825,29 +839,48 @@ mb <- microbenchmark(
 )
 ```
 
-## Tests
 
-La fonction `X_to_M()` calcule la fonction $M$ et renvoie le vecteur de ses valeurs pour chaque distance.
-Elle est utile pour mesurer les temps d'exécution.
+### Mémoire
+
+La mémoire utilisée est évaluée avec le package *profmem*.
 
 ```{r}
-#| label: XtoMCode
-#| eval: false
-# Compute M
-X_to_M <- function(X) {
-  X %>% 
-    Mhat(r = r, ReferenceType = "Case") %>% 
-    pull("M")
+#| label: TestMemCode
+# RAM
+library("profmem")
+test_ram <- function(points_nb) {
+  X <- X_csr(points_nb)
+  profmem(X_to_M(X)) %>% 
+    pull("bytes") %>% 
+    sum(na.rm = TRUE)
 }
+sapply(X_sizes, FUN = test_ram) %>% 
+  tibble(Size = X_sizes, RAM = . / 2^20) ->
+  M_ram
+M_ram %>% 
+  ggplot(aes(x = Size, y = RAM)) +
+    geom_point() +
+    geom_line()
 ```
+
+La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points.
+
+```{r}
+#| label: MemModelCode
+# Model
+lm(RAM ~ Size, data = M_ram) |> summary()
+```
+
+
+## Effets de l'approximation de la position des points
 
 Le nombre de répétition des tests est fixé par `simulations_n`.
 
 ```{r}
 #| label: ParamsSimsCode
-#| eval: false
 simulations_n <- 10
 ```
+
 
 ### Cas d'une distribution agrégée (Matérn)
 
@@ -856,7 +889,6 @@ simulations_n <- 10
 
 ```{r}
 #| label: XMaternListCode
-#| eval: false
 # Simulate X
 X_matern_list <- replicate(
   simulations_n, 
@@ -976,6 +1008,12 @@ sapply(
     geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
+La figure ci-dessus montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
+Par définition, la valeur moyenne est sans erreur.
+L'erreur relative (à la valeur exacte de $M$) moyenne est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
+Bien que les corrélations soient très grandes, l'erreur relative dépasse 25% jusqu'à 2 fois la taille de la maille.
+
+
 
 ### Cas d'une distribution complètement aléatoire (CSR)
 
@@ -983,7 +1021,6 @@ sapply(
 
 ```{r}
 #| label: XCSRListCode
-#| eval: false
 # Simulate X
 X_csr_list <- replicate(
   simulations_n, 
@@ -1076,98 +1113,16 @@ sapply(
     geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
+Les barres rouges sur la figure ci-dessus représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
+Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
+Les barres d'erreur sont l'écart-type de cette différence.
 
-## Performance de M
+On constate que l'approximation sous-estime systématiquement $M$.
+L'erreur est maximale jusqu'à la taille de la grille: tous les points d'une même cellule sont placés artificiellement en son centre.
+Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 4 fois la taille de la grille.
 
-### Temps de calcul
+Notre conclusion prudente dans ce cas est que l'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
 
-Le temps nécessaire au calcul exact est évalué pour une gamme de nombres de points précisée dans `X_sizes`.
-
-```{r}
-#| label: ParamsXSizeCode
-#| eval: false
-X_sizes <- c(1000, 5000) #, 10000, 50000, 100000)
-```
-
-La fonction `test_time()` permet de mesurer le temps d'exécution d'une évaluation de la fonction $M$.
-
-```{r}
-#| label: TestTimeCode
-#| eval: false
-library("microbenchmark")
-test_time <- function(points_nb) {
-  X <- X_csr(points_nb)
-  microbenchmark(X_to_M(X), times = 4L) %>% 
-    pull("time")
-}
-
-X_sizes %>% 
-  sapply(FUN = test_time) %>% 
-  as_tibble() %>% 
-  pivot_longer(cols = everything()) %>% 
-  rename(Size = name) %>% 
-  group_by(Size) %>% 
-  summarise(Time = mean(value) / 1E9, sd = sd(value) / 1E9) %>% 
-  mutate(
-    Size = as.double(
-      plyr::mapvalues(
-        .$Size, 
-        from = paste0("V", seq_along(X_sizes)), 
-        to = X_sizes
-      )
-    )
-  ) -> M_time
-M_time %>% 
-  ggplot(aes(x = Size, y = Time)) +
-    geom_point() +
-    geom_errorbar(aes(ymin = Time - sd, ymax = Time + sd)) +
-    scale_x_log10() +
-    scale_y_log10()
-```
-
-Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
-
-```{r}
-#| label: TimeModelCode
-#| eval: false
-# Model
-M_time %>% 
-  mutate(logTime = log(Time), logSize = log(Size)) ->
-  M_time_log
-M_time_lm <- lm(logTime ~ logSize, data = M_time_log) 
-summary(M_time_lm)
-```
-
-## Mémoire
-
-La mémoire utilisée est évaluée avec le package *profmem*.
-
-```{r}
-#| label: TestMemCode
-#| eval: false
-# RAM
-library("profmem")
-test_ram <-function(points_nb) {
-  X <- X_csr(points_nb)
-  profmem(X_to_M(X)) %>% 
-    pull("bytes") %>% 
-    sum()
-}
-sapply(X_sizes, FUN = test_ram) %>% 
-  tibble(Size = X_sizes, RAM = . / 2^20) ->
-  M_ram
-M_ram %>% 
-  ggplot(aes(x = Size, y = RAM)) +
-    geom_point() +
-    geom_line()
-```
-
-La mémoire nécessaire (en Mo) augmente linéairement avec le nombre de points.
-
-```{r}
-#| label: MemModelCode
-#| eval: false
-# Model
-lm(RAM ~ Size, data = M_ram) |> summary()
-```
+Le test sur les corrélations effectué ici est beaucoup plus sévère que dans @Tidu2023: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
+En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées, mais dans tous les cas l'erreur d'estimation est grande.
 
