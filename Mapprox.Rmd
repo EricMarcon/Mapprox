@@ -404,7 +404,7 @@ Les valeurs moyennes des estimations de *M* sont présentées dans la figure \@r
 ```
 
 La taille des cellules de la grille est égale à `r 1/par_partitions`.
-Tous les voisins à distance inférieure à cette distance sont supprimés: l'estimation de la fonction n'est pas correcte.
+Tous les voisins à distance inférieure à ce seuil sont placés à distance nulle: l'estimation de la fonction est constante jusqu'à ce seuil.
 
 La corrélation entre les valeurs de $M$ estimées par chaque méthode est calculée à chaque distance (figure \@ref(fig:CorMaternFig)).
 
@@ -417,7 +417,9 @@ La corrélation entre les valeurs de $M$ estimées par chaque méthode est calcu
 #| fig.cap: "(ref:CorMatern)"
 ```
 
-La corrélation est très proche de 1 dès que la distance prise en compte dépasse la maille de la grille: si la valeur exacte de la fonction *M* importe peu mais que ses variations en fonction de la distance sont utiles, par exemple en tant que covariable dans un modèle, alors l'approximation n'est pas un problème.
+La corrélation est très proche de 1, et les valeurs estimées très similaires, dès que la distance prise en compte dépasse la maille de la grille: l'approximation n'est pas un problème si les interactions entre les points sont étudiées au-delà de cette distance.
+L'information sur les interactions à courte distance, c'est-à-dire à l'intérieur de chaque cellule de la grille, est perdue, ou, plus précisément, approximée par sa valeur à 
+l'échelle de la grille.
 
 
 ## Cas d'une distribution complètement aléatoire (CSR)
@@ -458,8 +460,7 @@ Les valeurs moyennes sont présentées dans la figure \@ref(fig:MapproxCSRFig).
 ```
 
 La valeur moyenne de $M$ est égale à 1 à toutes les distances par construction: les cas et les contrôles sont distribués complètement aléatoirement.
-
-En absence de structure spatiale, les corrélations sont bien plus faibles (figure \@ref(fig:CorCSRFig)).
+Les approximations sont relativement faibles en valeur (quelques pourcents) mais comme la valeur réelle de $M$ varie peu autour de 1, les corrélations sont bien plus faibles (figure \@ref(fig:CorCSRFig)) en absence de structure spatiale.
 
 
 # Conclusion
@@ -474,8 +475,8 @@ Le calcul des distances est parallélisé: un serveur de calcul augmenterait dra
 En se limitant à la puissance de calcul d'un ordinateur personnel, le calcul exact se justifie donc pleinement pour des données de l'ordre de $10^5$ points: quelques heures suffisent à calculer des intervalles de confiance.
 
 Au-delà, l'approximation de la localisation permet de ramener la taille du jeu de points à celle du nombre de localisations retenues.
-Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici), et une erreur relative importante.
-Si les valeurs de $M$ sont utilisées comme covariables dans un modèle (par exemple pour expliquer la croissance des points), alors cette imprécision est acceptable parce que la corrélation entre leur valeur exacte et leur valeur approximée est élevée, dès que les points présentent une structure spatiale.
+Le prix à payer est l'absence d'information à l'échelle des unités géographiques élémentaires (les cellules de la grille ici).
+Selon les questions traitées, cette limite peut être acceptable ou non: la description globale de la structure spatiale est assez peu dégradée, mais l'étude des externalités, particulièrement intéressante à petite distance, est très limitée.
 
 
 # Annexe
@@ -635,33 +636,53 @@ par_partitions <- 20
 
 La fonction `group_points()` rassemble au centre de chaque cellule de la grille tous les points qu'elle contient.
 Cela permet de simuler l'approximation habituelle de la position des points d'une unité administrative sur la position de son centre.
+La position des points est légèrement bruitée pour permettre le calcul de M.
+La fonction `group_points_to_plot()` fusionne les points pour produire une carte.
 
 ```{r}
 #| label: group_pointsCode
 # Group points into cells
 group_points <- function(X, partitions = par_partitions) {
-X %>%
-  with(tibble(
-    x, 
-    y, 
-    PointType = marks$PointType, 
-    PointWeight = marks$PointWeight)
-  ) %>% 
-  mutate(
-    x_cell = ceiling(x * partitions) / partitions - 1 / 2 / partitions,
-    y_cell = ceiling(y * partitions) / partitions - 1 / 2 / partitions
-  ) %>%
-  group_by(PointType, x_cell, y_cell) %>% 
-  summarise(n = n(), PointWeight = sum(PointWeight)) %>% 
-  rename(x = x_cell, y = y_cell) %>% 
-  as.wmppp(window = X$window, unitname = X$window$units)
+  X %>%
+    with(tibble(
+      x, 
+      y, 
+      PointType = marks$PointType, 
+      PointWeight = marks$PointWeight)
+    ) %>% 
+    mutate(
+      x_cell = ceiling(x * partitions) / partitions - 1 / 2 / partitions,
+      y_cell = ceiling(y * partitions) / partitions - 1 / 2 / partitions,
+      .keep = "unused"
+    ) %>%
+    rename(x = x_cell, y = y_cell) |> 
+    as.wmppp(window = X$window, unitname = X$window$units) |> 
+    rjitter()
+}
+# Group points and merge them
+group_points_to_plot <- function(X, partitions = par_partitions) {
+  X %>%
+    with(tibble(
+      x, 
+      y, 
+      PointType = marks$PointType, 
+      PointWeight = marks$PointWeight)
+    ) %>% 
+    mutate(
+      x_cell = ceiling(x * partitions) / partitions - 1 / 2 / partitions,
+      y_cell = ceiling(y * partitions) / partitions - 1 / 2 / partitions
+    ) %>%
+    group_by(PointType, x_cell, y_cell) %>% 
+    summarise(n = n(), PointWeight = sum(PointWeight)) %>% 
+    rename(x = x_cell, y = y_cell) |> 
+    as.wmppp(window = X$window, unitname = X$window$units)
 }
 ```
 
 La figure est obtenue par le code suivant:
 ```{r}
 #| label: GroupedCode
-group_points(X) %>% autoplot(alpha = 0.5)
+X |> group_points_to_plot() |> autoplot(alpha = 0.5)
 ```
 
 
@@ -763,7 +784,7 @@ Elle est utile pour mesurer les temps d'exécution.
 X_to_M <- function(X) {
   X %>% 
     Mhat(r = r, ReferenceType = "Case") %>% 
-    pull("M")
+    pull("M")    
 }
 ```
 
@@ -910,11 +931,13 @@ Pour évaluer l'effet de l'approximation de la position, le calcul exact et le c
 #| eval: true
 library("pbapply")
 # Compute M
-system.time(M_matern_original <- pbsapply(X_matern_list, FUN = X_to_M))
-system.time(M_matern_grouped <- sapply(X_matern_grouped_list, FUN = X_to_M))
+M_matern_original <- pbsapply(X_matern_list, FUN = X_to_M)
+M_matern_grouped <- pbsapply(X_matern_grouped_list, FUN = X_to_M)
 ```
 
-Le calcul approximé est très rapide parce qu'il réduit le nombre de points à celui du nombre de cellules.
+Le calcul approximé est très rapide parce qu'il réduit le nombre de points à celui du nombre de cellules, à condition d'en tirer partie dans le code utilisé pour le calcul.
+Ce n'est pas le cas ici: le package *dbmss* ne prévoit pas cette approximation.
+La fonction `M_hat()` est donc appliquée au jeu de points regroupé mais calculée de la même façon qu'avec le jeu de points original.
 
 Les valeurs moyennes des estimations de *M* sont présentées ci-dessous.
 
@@ -1010,9 +1033,11 @@ sapply(
 
 La figure ci-dessus montre, en rouge, la variabilité de la valeur de $M$ (son coefficient de variation) au cours des simulations.
 Par définition, la valeur moyenne est sans erreur.
-L'erreur relative (à la valeur exacte de $M$) moyenne est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
-Bien que les corrélations soient très grandes, l'erreur relative dépasse 25% jusqu'à 2 fois la taille de la maille.
+A courte distance, les valeurs de *M* varient beaucoup pour un même processus ponctuel, en fonction de la stochasticité de ses tirages.
+Comme *M* est une fonction cumulative, elle se stabilise quand la distance augmente.
 
+L'erreur relative (à la valeur exacte de $M$) moyenne, due à l'approximtion de la position des points, est présentée en noir, avec son écart-type normalisé par la valeur exacte de $M$.
+Elle est faible, inférieure à 10%, même à courte distance.
 
 
 ### Cas d'une distribution complètement aléatoire (CSR)
@@ -1113,16 +1138,9 @@ sapply(
     geom_errorbar(aes(x = r, ymin = -`M CV`, ymax = `M CV`), col = "red")
 ```
 
-Les barres rouges sur la figure ci-dessus représentent l'écart-type empirique de la valeur de $M$, calculé à partir des simulations.
-Les points noirs montrent l'erreur apportée par l'approximation, mesurée par l'écart moyen entre les valeurs de $M$ calculées avec ou sans approximation.
-Les barres d'erreur sont l'écart-type de cette différence.
 
-On constate que l'approximation sous-estime systématiquement $M$.
-L'erreur est maximale jusqu'à la taille de la grille: tous les points d'une même cellule sont placés artificiellement en son centre.
-Elle chute brutalement au-delà de ce seuil mais reste importante jusqu'à 4 fois la taille de la grille.
+La figure ci-dessus est construite de la même façon que pour les jeux de points agrégés.
+En absence de structure spatiale, la valeur de *M* varie beaucoup moins.
 
-Notre conclusion prudente dans ce cas est que l'approximation de doit pas être utilisée pour étudier les interactions à courte distance.
-
-Le test sur les corrélations effectué ici est beaucoup plus sévère que dans @Tidu2023: les points n'ont aucune structure, donc $M$ permet de détecter les petites variations aléatoires des différents tirages.
-En présence d'une structure spatiale, les valeurs de $M$ sont nettement mieux corrélées, mais dans tous les cas l'erreur d'estimation est grande.
-
+En présence d'une structure spatiale, l'erreur d'estimation est grande à courte distance.
+Elle devient négligeable au-delà de la maille de la grille.
