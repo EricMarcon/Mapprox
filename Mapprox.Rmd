@@ -903,7 +903,7 @@ Le nombre de répétition des tests est fixé par `simulations_n`.
 
 ```{r}
 #| label: ParamsSimsCode
-simulations_n <- 10
+simulations_n <- 100
 ```
 
 
