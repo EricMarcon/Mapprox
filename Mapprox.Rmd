@@ -324,6 +324,12 @@ L'utilisation d'une matrice de distance peut sembler efficace pour en économise
 #| echo: false
 mb |> summary() |> as.data.frame() |>
   select(expr, median) |> 
+  mutate(
+    `Méthode` = c("Jeu de points", "Matrice de distances"), 
+    `Temps` = round(median),
+    .before = expr,
+    .keep = "none" 
+  ) |>
   knitr::kable(
     caption = paste(
       "Temps d'exécution médian, en millisecondes, de l'estimation", 
@@ -336,8 +342,6 @@ mb |> summary() |> as.data.frame() |>
   ) %>%
   kableExtra::kable_styling(bootstrap_options = "striped", full_width = TRUE)
 ```
-
-
 
 
 ## Mémoire
