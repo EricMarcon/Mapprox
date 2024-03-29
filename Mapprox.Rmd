@@ -15,38 +15,31 @@ corrauthor:
 abstract: >
   Cet article méthodologique porte sur une mesure relative de la concentration spatiale en espace continu, la fonction $M$, proposée par @Marcon2010.
   L'objectif de notre contribution est d'apporter des réponses au traitement de jeu de données spatialisées de grande taille avec M sous R. 
-  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: les temps de calcul et l'estimation des erreurs liées à l'approximation de la position géographique des observations. 
   Dans un premier temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sous R sont évalués.
   Dans un second temps, nous testons l'impact de l'approximation de la position géographique sur la précision de M, comme proposé par @Tidu2023.
   Le code R est fourni pour la reproductibilité des résultats.
+  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: les temps de calcul et l'estimation des erreurs liées à l'approximation de la position géographique des observations. 
 date: "`r format(Sys.time(), '%Y %B %d')`"
 archive: "`r format(Sys.time(), '%d %B %Y')`"
 url: https://EricMarcon.github.io/Mapprox/
 github-repo: EricMarcon/Mapprox
-# Language
 lang: fr-FR
-# Bibliography
 bibliography: references.bib
 biblio-style: chicago
-# LaTeX
-# Print table of contents in PDFs?
 pdftoc: false
-# If true, choose its depth
 toc-depth: 3
-# URL color
 urlcolor: blue
-# Do not modify
 always_allow_html: yes
 output:
-  bookdown::html_document2:
-    base_format: distill::distill_article
-    toc: yes
-    toc_float: yes
   bookdown::pdf_book:
     template: latex/template.tex
     citation_package: natbib
     latex_engine: xelatex
     keep_tex: no
+  bookdown::html_document2:
+    base_format: distill::distill_article
+    toc: yes
+    toc_float: yes
 ---
 
 ```{r DoNotModify, include=FALSE}
@@ -113,7 +106,7 @@ L'accès grandissant à d'importants jeux de données individuelles et spatialis
 Des études empiriques à des niveaux géographiques très fins ont ainsi pu été proposées au cours des dernières années pour des jeux de données de grande taille. 
 Une attention particulière a porté sur la détection des structures spatiales (attraction, répulsion, indépendance) de données individuelles spatialisées à partir d'analyses ne reposant plus des données zonées mais sur des données géolocalisées. 
 Ce type d'approche a l'avantage de préserver les positions exactes des entités analysées  et par conséquent de ne pas gommer les spécificités individuelles. 
-Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998, @Deurloo2008], en économie [@Arbia1989, @Marcon2003a], en écologie [@Cressie1993,@Lentz2011],  en biologie [@Dray2021] etc.
+Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998; @Deurloo2008], en économie [@Arbia1989; @Marcon2003a], en écologie [@Cressie1993; @Lentz2011],  en biologie [@Dray2021] etc.
 Dans un article récent, @Tidu2023 soulignent l'intérêt d'une mesure statistique particulière, la fonction *M* proposée par @Marcon2010. 
 Cette mesure, que nous dénommerons *M* dans la suite de l'article, permet de mettre en évidence et les structures spatiales au sein d'une distribution spatialisée (attraction, répulsion, indépendance) à partir d'une étude fondée sur les distances séparant les entités analysées. 
 Toutefois, si cette mesure permet de préserver toute la richesse des données individuelles géolocalisées, elle nécessite un temps de calcul plus long que d'autres mesures fondées sur les distances puisqu'elle est à la fois une mesure cumulative et relative (voir @Marcon2012c pour une revue de littérature sur les avantages et les limites d'une dizaine mesures existantes fondées sur les distances). 
@@ -124,7 +117,7 @@ Cette approche est analogue à celle de @Scholl2013 qui ont proposé, pour la fo
 La méthode de @Scholl2013, implémentée dans le package *dbmss* [@Marcon2014] pour R [@R] apporte un gain de performance computationnelle considérable avec une faible perte de précision.
 
 Dans notre article, nous proposons de tester l'efficacité de la méthode de @Tidu2023.
-Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au delà.
+Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au delà.
 Nous étudions ensuite l'effet de l'approximation géographique des localisations des entités analysées.
 Ce travail méthodologique reposant sur un nombre d'emplacements des entités volontairement limité permet de quantifier l'importance de la détérioration de l'information que cette approche crée. 
 
