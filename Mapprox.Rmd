@@ -114,23 +114,28 @@ Des études empiriques à des niveaux géographiques très fins ont ainsi pu ét
 Une attention particulière a porté sur la détection des structures spatiales (attraction, répulsion, indépendance) de données individuelles spatialisées à partir d'analyses ne reposant plus des données zonées mais sur des données géolocalisées. 
 Ce type d'approche a l'avantage de préserver les positions exactes des entités analysées  et par conséquent de ne pas gommer les spécificités individuelles. 
 Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998, @Deurloo2008], en économie [@Arbia1989, @Marcon2003a], en écologie [@Cressie1993,@Lentz2011],  en biologie [@Dray2021] etc.
-Dans un article récent, @Tidu2023 soulignent tout l'intérêt d'une mesure statistique particulière, la fonction M proposée par @Marcon2010. 
+Dans un article récent, @Tidu2023 soulignent l'intérêt d'une mesure statistique particulière, la fonction *M* proposée par @Marcon2010. 
 Cette mesure, que nous dénommerons *M* dans la suite de l'article, permet de mettre en évidence et les structures spatiales au sein d'une distribution spatialisée (attraction, répulsion, indépendance) à partir d'une étude fondée sur les distances séparant les entités analysées. 
 Toutefois, si cette mesure permet de préserver toute la richesse des données individuelles géolocalisées, elle nécessite un temps de calcul plus long que d'autres mesures fondées sur les distances puisqu'elle est à la fois une mesure cumulative et relative (voir @Marcon2012c pour une revue de littérature sur les avantages et les limites d'une dizaine mesures existantes fondées sur les distances). 
 @Tidu2023 proposent de limiter les temps de calculs de *M* en introduisant une erreur de positionnement volontaire des entités analysées. 
 Ainsi, dans leur étude, les établissements industriels en Sardaigne (Italie) ne sont plus localisés à leur adresse postale exacte mais au centroïde de leur municipalité. 
 Ce repositionnement permet de réduire les temps de calcul car le nombre de distances possibles entre les établissements est, de fait, limité aux distances séparant les centroïdes des communes. 
-Dans notre article, nous proposons dans un premier temps d'étudier la généralisation de cette méthode d'approximation géographique des localisations des entités analysées.
-Ce travail méthodologique reposant sur un nombre d'emplacements des entités volontairement limité permettra de quantifier l'importance de la détérioration de l'information que cette approche crée. 
-Dans un second temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour effectuer ces approximations.
+Cette approche est analogue à celle de @Scholl2013 qui ont proposé, pour la fonction $K_d$ [@Duranton2005] qui permet de caractériser les structures spatiales par une autre méthode, d'approximer les distances entre paires d'entités en les regroupant par classes.
+La méthode de @Scholl2013, implémentée dans le package *dbmss* [@Marcon2014] pour R [R] apporte un gain de performance computationnelle considérable avec une faible perte de précision.
+
+Dans notre article, nous proposons de tester l'efficacité de la méthode de @Tidu2023.
+Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au delà.
+Nous étudions ensuite l'effet de l'approximation géographique des localisations des entités analysées.
+Ce travail méthodologique reposant sur un nombre d'emplacements des entités volontairement limité permet de quantifier l'importance de la détérioration de l'information que cette approche crée. 
 
 Le plan de l'article est le suivant. 
 Une première section génère les données nécessaires. 
 Des jeux de points de grande taille (de l'ordre de plusieurs dizaines de milliers de points) complètement aléatoires ou (géographiquement) concentrés sont tirés. 
-L'approximation de leur position consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent. 
 La deuxième section détaille l'utilisation du package *dbmss* pour calculer la fonction *M* et son intervalle de confiance à partir d'un tableau donnant la position et les caractéristiques des points ou bien une matrice de distances entre eux. 
-La troisième section teste l'impact de l'approximation des points. 
-Enfin, la dernière section mesure la performance de *dbmss* en fonction de la taille du jeu de points.
+La troisième section mesure la performance de *dbmss* en fonction de la taille du jeu de points, en termes de temps de calcul et de mémoire nécessaire.
+Enfin, la dernière section teste l'approximation qui consiste à les rassembler au centre des cases d'une grille, selon l'approche de @Tidu2023 qui les positionnent au centre des unités administratives dans lesquelles ils se trouvent. 
+ 
+
 
 
 # Simulation des données
