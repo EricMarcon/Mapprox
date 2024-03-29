@@ -15,9 +15,9 @@ corrauthor:
 abstract: >
   Cet article méthodologique porte sur une mesure relative de la concentration spatiale en espace continu, la fonction $M$, proposée par @Marcon2010.
   L'objectif de notre contribution est d'apporter des réponses au traitement de jeu de données spatialisées de grande taille avec M sous R. 
-  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: l'estimation des erreurs liées à l'approximation de la position géographique des observations et les délais de calcul. 
-  Dans un premier temps, nous testons l'impact de l'approximation de la position géographique sur la précision de M et du temps de calcul associé, comme proposé par @Tidu2023. 
-  Dans un second temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sous R sont évalués. 
+  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: les temps de calcul et l'estimation des erreurs liées à l'approximation de la position géographique des observations. 
+  Dans un premier temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sous R sont évalués.
+  Dans un second temps, nous testons l'impact de l'approximation de la position géographique sur la précision de M, comme proposé par @Tidu2023.
   Le code R est fourni pour la reproductibilité des résultats.
 date: "`r format(Sys.time(), '%Y %B %d')`"
 archive: "`r format(Sys.time(), '%d %B %Y')`"
