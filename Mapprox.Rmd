@@ -317,6 +317,8 @@ L'utilisation d'une matrice de distance peut sembler efficace pour en économise
 ```
 
 
+(ref:Mmb) Temps d'exécution médian, en millisecondes, de l'estimation de la fonction *M* à partir d'un jeu de `r par_points_nb` points ou de la matrice de distances correspondante.
+
 ```{r}
 #| label: MmbTab
 #| echo: false
@@ -329,16 +331,10 @@ mb |> summary() |> as.data.frame() |>
     .keep = "none" 
   ) |>
   knitr::kable(
-    caption = paste(
-      "Temps d'exécution médian, en millisecondes, de l'estimation", 
-      "de la fonction *M* à partir d'un jeu de",
-      par_points_nb,
-      "points ou de la matrice de distances correspondante"
-    ),
+    caption = "(ref:Mmb)",
     longtable = FALSE, 
     booktabs = TRUE
-  ) %>%
-  kableExtra::kable_styling(bootstrap_options = "striped", full_width = TRUE)
+  )
 ```
 
 
