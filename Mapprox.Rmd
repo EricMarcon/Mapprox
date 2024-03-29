@@ -121,7 +121,7 @@ Toutefois, si cette mesure permet de préserver toute la richesse des données i
 Ainsi, dans leur étude, les établissements industriels en Sardaigne (Italie) ne sont plus localisés à leur adresse postale exacte mais au centroïde de leur municipalité. 
 Ce repositionnement permet de réduire les temps de calcul car le nombre de distances possibles entre les établissements est, de fait, limité aux distances séparant les centroïdes des communes. 
 Cette approche est analogue à celle de @Scholl2013 qui ont proposé, pour la fonction $K_d$ [@Duranton2005] qui permet de caractériser les structures spatiales par une autre méthode, d'approximer les distances entre paires d'entités en les regroupant par classes.
-La méthode de @Scholl2013, implémentée dans le package *dbmss* [@Marcon2014] pour R [R] apporte un gain de performance computationnelle considérable avec une faible perte de précision.
+La méthode de @Scholl2013, implémentée dans le package *dbmss* [@Marcon2014] pour R [@R] apporte un gain de performance computationnelle considérable avec une faible perte de précision.
 
 Dans notre article, nous proposons de tester l'efficacité de la méthode de @Tidu2023.
 Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* [@Marcon2014] pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au delà.
