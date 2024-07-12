@@ -13,12 +13,15 @@ affiliation:
 corrauthor:
   email: eric.marcon@agroparistech.fr
 abstract: >
-  Cet article méthodologique porte sur une mesure relative de la concentration spatiale en espace continu, la fonction $M$, proposée par @Marcon2010.
-  L'objectif de notre contribution est d'apporter des réponses au traitement de jeu de données spatialisées de grande taille avec M sous R. 
-  Dans un premier temps, les besoins en temps et en mémoire du calcul exact avec le package dbmss sous R sont évalués.
-  Dans un second temps, nous testons l'impact de l'approximation de la position géographique sur la précision de M, comme proposé par @Tidu2023.
-  Le code R est fourni pour la reproductibilité des résultats.
-  Plus précisément, les deux sources d'incertitude pour le traitement de jeux de données importants sont analysées: les temps de calcul et l'estimation des erreurs liées à l'approximation de la position géographique des observations. 
+  L’accès grandissant à d'importants jeux de données individuelles et spatialisées couplé au développement de la puissance de calcul ont encouragé la recherche d’outils statistiques adaptés pour analyser au mieux de telles données. 
+  Dans un article récent publié dans cette revue, @Tidu2023 soulignent les qualités de la fonction *M* [@Marcon2010], une mesure de concentration spatiale en espace continu. 
+  Ils émettent aussi une réserve sur les temps de calculs nécessaires.
+  Notre travail méthodologique cherche à préciser le traitement de jeux de données spatialisées de grande taille avec *M* sous le logiciel R.
+  Deux voies sont  explorées pour déterminer les performances computationnelles de *M*.
+  Tout d'abord, une évaluation précise des besoins en temps et en mémoire de calcul sur des données géo-localisées est réalisée avec le package dbmss sous R grâce à des tests de performance. 
+  Puis, comme suggéré par @Tidu2023, nous considérons également la possibilité d'approximer les positions géographiques des entités analysées.
+  L'importance de la détérioration de l'estimation de *M* que cette approche crée peut ainsi être estimée, tout comme les gains en temps de calculs permis par l'approximation spatiale des localisations. 
+  L’ensemble du code R est donné pour la reproductibilité des résultats.
 date: "`r format(Sys.time(), '%Y %B %d')`"
 archive: "`r format(Sys.time(), '%d %B %Y')`"
 url: https://EricMarcon.github.io/Mapprox/
@@ -35,6 +38,7 @@ output:
     base_format: distill::distill_article
     toc: yes
     toc_float: yes
+    number_sections: true
   bookdown::pdf_book:
     template: latex/template.tex
     citation_package: natbib
@@ -106,7 +110,7 @@ L'accès grandissant à d'importants jeux de données individuelles et spatialis
 Des études empiriques à des niveaux géographiques très fins ont ainsi pu été proposées au cours des dernières années pour des jeux de données de grande taille. 
 Une attention particulière a porté sur la détection des structures spatiales (attraction, répulsion, indépendance) de données individuelles spatialisées à partir d'analyses ne reposant plus des données zonées mais sur des données géolocalisées. 
 Ce type d'approche a l'avantage de préserver les positions exactes des entités analysées  et par conséquent de ne pas gommer les spécificités individuelles. 
-Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998; @Deurloo2008], en économie [@Arbia1989; @Marcon2003a], en écologie [@Cressie1993; @Lentz2011],  en biologie [@Dray2021] etc.
+Diverses études ont montré toute l'importance de retenir une telle méthodologie dans des domaines très variés comme en géographie [@Sweeney1998; @Deurloo2008], en économie [@Arbia1989; @Marcon2003a], en écologie [@Cressie1993; @Lentz2011], en biologie [@Dray2021] etc.
 Dans un article récent, @Tidu2023 soulignent l'intérêt d'une mesure statistique particulière, la fonction *M* proposée par @Marcon2010. 
 Cette mesure, que nous dénommerons *M* dans la suite de l'article, permet de mettre en évidence et les structures spatiales au sein d'une distribution spatialisée (attraction, répulsion, indépendance) à partir d'une étude fondée sur les distances séparant les entités analysées. 
 Toutefois, si cette mesure permet de préserver toute la richesse des données individuelles géolocalisées, elle nécessite un temps de calcul plus long que d'autres mesures fondées sur les distances puisqu'elle est à la fois une mesure cumulative et relative (voir @Marcon2012c pour une revue de littérature sur les avantages et les limites d'une dizaine mesures existantes fondées sur les distances). 
@@ -117,9 +121,10 @@ Cette approche est analogue à celle de @Scholl2013 qui ont proposé, pour la fo
 La méthode de @Scholl2013, implémentée dans le package *dbmss* [@Marcon2014] pour R [@R] apporte un gain de performance computationnelle considérable avec une faible perte de précision.
 
 Dans notre article, nous proposons de tester l'efficacité de la méthode de @Tidu2023.
-Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au delà.
+Dans un premier temps, nous montrons les avantages de l'utilisation du package *dbmss* pour estimer la fonction *M* sur des jeux de données dont l'ordre de grandeur est de 100 000 points ou moins et nous montrons que les temps de calcul deviennent excessifs au-delà, sur un ordinateur personnel.
 Nous étudions ensuite l'effet de l'approximation géographique des localisations des entités analysées.
 Ce travail méthodologique reposant sur un nombre d'emplacements des entités volontairement limité permet de quantifier l'importance de la détérioration de l'information que cette approche crée. 
+Ces tests de performance permettent d'apporter une réponse précise sur les avantages et les limites computationnelles de la fonction *M* en fonction de la taille des jeux de données
 
 Le plan de l'article est le suivant. 
 Une première section génère les données nécessaires. 
@@ -165,7 +170,7 @@ Des jeux de points agrégés peuvent être tirés dans un processus de @Matern19
 #| ref.label: ParamsMaternCode
 ```
 
-(ref:XMatern) Tirage d'un jeu de points dont les cas (en rouge) sont agrégés alors que les contrôles (en bleu) sont distribués complèteent aléatoirement. La taille des points est proportionnelle à leur poids. 
+(ref:XMatern) Tirage d'un jeu de points dont les cas (en rouge) sont agrégés alors que les contrôles (en bleu) sont distribués complètement aléatoirement. La taille des points est proportionnelle à leur poids. 
 
 ```{r}
 #| label: XMaternFig
@@ -174,7 +179,7 @@ Des jeux de points agrégés peuvent être tirés dans un processus de @Matern19
 #| fig.cap: "(ref:XMatern)"
 ```
 
-Les Cas apparaissent dans figure \@ref(fig:XMaternFig): les agrégats sont nettement visibles.
+Les Cas apparaissent dans la figure \@ref(fig:XMaternFig): les agrégats sont nettement visibles.
 Les contrôles (non représentés) sont distribués complètement aléatoirement.
 
 
@@ -210,7 +215,7 @@ Chaque cellule ne contient plus qu'un seul point de chaque type dont le poids es
 Les valeurs de la fonction *M* peuvent maintenant être calculées à partir du jeu de point original ou de son approximation après recentrage. 
 
 
-# Calcul de M avec le package *dbmss*
+# Calcul de *M* avec le package *dbmss*
 
 ```{r}
 #| label: Paramsr
@@ -220,7 +225,7 @@ Les valeurs de la fonction *M* peuvent maintenant être calculées à partir du 
 
 ## Données nécessaires
 
-Dans le package *dbmss*, la fonction s'applique à un jeu de points ou à une matrice de distance.
+Dans le package *dbmss*, la fonction s'applique à un jeu de points ou à une matrice de distances.
 Le jeu de points de la figure \@ref(fig:XMaternFig) est utilisé.
 La matrice de distances entre toutes les paires de ses points est calculée pour constituer les données sur lesquelles les tests de performance seront réalisés.
 
@@ -235,13 +240,13 @@ La matrice de distances entre toutes les paires de ses points est calculée pour
 La fonction `Mhat()` du package *dbmss* permet d'estimer la fonction *M*.
 La valeur de référence théorique de *M* est 1 car cette fonction rapporte la proportion de Cas jusqu'à une distance $r$ à celle observée sur toute la fenêtre. 
 L'agrégation des Cas sera mise en évidence par des valeurs de *M* supérieures à 1 (la présence relative de Cas est plus importante localement que sur l'ensemble de la fenêtre) et la dispersion des Cas par des valeurs inférieures à 1. 
-On observe (figure \@ref(fig:MFig)) que *M* détecte une agglomération des Cas, ce qui est en accord avec la simulation de ce type de points (les contrôles ayant localisation complètement aléatoire sur la fenêtre). 
+On observe (figure \@ref(fig:MFig)) que *M* détecte une agglomération des Cas, ce qui est en accord avec la simulation de ce type de points (les contrôles ayant une localisation complètement aléatoire sur la fenêtre). 
 L'avantage d'une fonction fondée sur les distances est nettement visible: elle permet de détecter exactement à quelle(s) distance(s) les phénomènes d'attraction se produisent et sont les plus importants (pour les fonctions dont les valeurs peuvent être comparées à différents rayons, comme *M*).
 
 La fonction `Menvelope()` permet de calculer en plus de l'estimation de la fonction *M* son intervalle de confiance global [@Duranton2005] sous l'hypothèse nulle de localisation aléatoire des points.
 Son résultat est représenté sur la figure \@ref(fig:MFig).
 
-(ref:M) Valeur de *M* en fonction de la distance au point de référence. l'intervalle de confiance, simulé à 95%, apparaît en gris et est centré sur la valeur 1.
+(ref:M) Valeur de *M* en fonction de la distance au point de référence. L'intervalle de confiance, simulé à 95%, apparaît en gris et est centré sur la valeur 1.
 
 ```{r}
 #| label: MFig
@@ -261,7 +266,7 @@ Son résultat est représenté sur la figure \@ref(fig:MFig).
 
 Les matrices permettent de traiter des distances non euclidiennes (temps de transport, distance routière...) qui ne peuvent pas être représentées par un jeu de points.
 
-Les fonctions `Mhat()` et `MEnvelope()` sont les mêmes, et fournissent les mêmes résultats quelle que soit la forme des données utilisées ici (jeu de point ou matrice de distance).
+Les fonctions `Mhat()` et `MEnvelope()` sont les mêmes, et fournissent les mêmes résultats quelle que soit la forme des données utilisées ici (jeu de point ou matrice de distances).
 
 
 # Performance du calcul
@@ -287,7 +292,7 @@ Le temps de calcul nécessaire au calcul exact est évalué pour une gamme de no
 #| ref.label: ParamsXSizeCode
 ```
 
-(ref:TestTime) Temps de calcul de l'estimation de la fonction *M* en fonction de la taille du jeu de points. Les barres représentent l'intervalle de $\pm 1$ écart-type.
+(ref:TestTime) Temps de calcul (secondes) de l'estimation de la fonction *M* en fonction de la taille du jeu de points. Les barres représentent l'intervalle de $\pm 1$ écart-type.
 
 ```{r}
 #| label: TestTimeFig
@@ -308,7 +313,7 @@ Le temps de calcul est lié à la taille du jeu de points par une loi puissance.
 Il augmente moins vite que le carré du nombre de points.
 Il peut être estimé très précisément ($R^2=$ `r format(summary(M_time_lm)$r.squared, digits=2)`) par la relation $t = t_0 (n / n_o)^p$ où $t$ est le temps estimé pour $n$ points connaissant le temps $t_0$ (ex.: `r format(as.numeric(M_time[5, 2]), digits=3)` secondes) pour $n_0$ points (ex.: `r as.integer(M_time[5, 1])`) et $p$ la relation de puissance (`r format(M_time_lm$coefficients[2], digits=3)`).
 
-L'utilisation d'une matrice de distance peut sembler efficace pour en économiser le temps de calcul mais le calcul des distances est en réalité extrêmement rapide et le traitement complet à partir d'une matrice est finalement plus long (tableau \@ref(tab:MmbTab)).
+L'utilisation d'une matrice de distances peut sembler efficace pour en économiser le temps de calcul mais le calcul des distances est en réalité extrêmement rapide et le traitement complet à partir d'une matrice est finalement plus long (tableau \@ref(tab:MmbTab)).
 
 ```{r}
 #| label: Mmb
@@ -367,10 +372,10 @@ Comme le temps de calcul n'est pas réduit par cette approche, son utilisation e
 #| ref.label: ParamsSimsCode
 ```
 
-Il est évident que l'approximation de la position des points entraîne une perte d'information: dans chaque cellule de la grille, la distance entre tous les points est fixée à 0,et la distance entre deux points de cellules différentes est approchée par celle entre les centroïdes des deux cellules.
-On s'attend donc à une sévère erreur dans l'estimation de *M* à petite échelle (de l'ordre de grandeur des la taille des cellules) et une erreur diminuant avec la distance, quand la taille relative des cellules diminue.
+Il est évident que l'approximation de la position des points entraîne une perte d'information: dans chaque cellule de la grille, la distance entre tous les points est fixée à 0, et la distance entre deux points de cellules différentes est approchée par celle entre les centroïdes des deux cellules.
+On s'attend donc à une sévère erreur dans l'estimation de *M* à petite échelle (de l'ordre de grandeur de la taille des cellules) et une erreur diminuant avec la distance, quand la taille relative des cellules diminue.
 
-L'effet de l'approximation de la localisation est testé d'abord sur un jeu de points agrégé, similaire aux données réelles de @Tidu2023.
+L'effet de l'approximation de la localisation est testé d'abord sur un jeu de points agrégés, similaire aux données réelles de @Tidu2023.
 Dans un deuxième temps, le cas d'un jeu de points non structuré est traité.
 
 ## Cas d'une distribution agrégée (Matérn)
@@ -462,6 +467,11 @@ Les approximations sont relativement faibles en valeur (quelques pourcents) mais
 
 
 # Conclusion
+
+Pour résumé et d'après les cas proposés dans cet article, il semble que l'approximation sur la localisation peut être considérée pour gagner en temps de calculs, étant donné les fortes corrélation observées entre les valeurs de *M* sur données exactes et approximées mais en conservant un maillage très fin. 
+Notre résultat va donc dans le sens de l'article de @Tidu2023 qui mentionne de fortes corrélations sur des données de localisations d'entreprises italiennes. 
+La structure spatiale de leurs données devant être probablement un cas intermédiaire entre les deux cas traités dans notre article (distributions théoriques agrégée et aléatoire), les résultats apportés par nos deux contributions sont donc complémentaires. 
+En revanche, si l'objet de l'étude est de s'intéresser aux structures spatiales à très petites distances, l'approximation des positions géographiques n'est alors pas souhaitable car ce sont pour ces distances que les écarts entre les résultats de *M* sont les plus grands.
 
 Le temps de calcul de $M$ est de l'ordre de 6 secondes pour un jeu de 100 000 points sur un ordinateur portable (processeur Intel i7-1360P 2.20 GHz), et nécessite 25 Mo de RAM.
 Le calcul d'un intervalle de confiance à partir de 1000 simulations prend donc moins de deux heures.
@@ -695,7 +705,7 @@ r <- c((0:9) / 100, (2:10) / 20)
 
 ### Données nécessaires
 
-Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distance, objet de classe `Dtable`.
+Dans le package *dbmss*, la fonction s'applique à un jeu de points, objet de classe `wmppp`, ou à une matrice de distances, objet de classe `Dtable`.
 
 Nous partons d'un tableau (data.frame) contenant les colonnes `x`, `y`, `PointType` et `PointWeight`.
 
@@ -944,7 +954,7 @@ Les valeurs moyennes des estimations de *M* sont présentées ci-dessous.
 #| eval: true
 tibble(
   r,
-  Original = rowMeans(M_matern_original), 
+  Exact = rowMeans(M_matern_original), 
   Grouped =  rowMeans(M_matern_grouped)
 ) %>% 
   pivot_longer(
@@ -1075,7 +1085,7 @@ Les valeurs moyennes sont présentées ci-dessous.
 #| eval: true
 tibble(
   r,
-  Original = rowMeans(M_csr_original), 
+  Exact = rowMeans(M_csr_original), 
   Grouped =  rowMeans(M_csr_grouped)
 ) %>% 
   pivot_longer(
